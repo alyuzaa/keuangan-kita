@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Pencatatan keuangan pribadi untuk suami dan istri." />
+    <meta name="theme-color" content="#173f33" />
+    <title>Keuangan Kita</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="configError" class="config-error hidden">
+      <strong>Konfigurasi Supabase belum diisi.</strong>
+      <span>Buka <code>config.js</code>, lalu isi URL dan publishable/anon key proyekmu.</span>
+    </div>
+
+    <main id="authScreen" class="auth-screen hidden">
+      <section class="auth-card">
+        <div class="brand-icon large" aria-hidden="true">♡</div>
+        <p class="eyebrow">RUANG KEUANGAN PRIBADI</p>
+        <h1>Keuangan Kita</h1>
+        <p class="auth-copy">Catat pemasukan, pengeluaran, tabungan, dan aset keluarga dalam satu tempat yang privat.</p>
+
+        <div class="auth-tabs" role="tablist" aria-label="Pilih cara masuk">
+          <button id="loginTab" class="active" type="button" role="tab">Masuk</button>
+          <button id="registerTab" type="button" role="tab">Daftar</button>
+        </div>
+
+        <form id="authForm" class="auth-form">
+          <label>
+            <span>Email</span>
+            <input id="authEmail" type="email" autocomplete="email" placeholder="nama@email.com" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="authPassword" type="password" autocomplete="current-password" minlength="8" placeholder="Minimal 8 karakter" required />
+          </label>
+          <button id="authSubmit" class="button primary full" type="submit">Masuk</button>
+          <button id="forgotPassword" class="text-button" type="button">Lupa password?</button>
+        </form>
+
+        <div class="security-note">
+          <span class="security-icon">⌾</span>
+          <span>Data hanya dapat dibuka oleh anggota keluarga yang terdaftar.</span>
+        </div>
+      </section>
+      <div class="auth-orbit" aria-hidden="true">⌂</div>
+    </main>
+
+    <main id="householdScreen" class="household-screen hidden">
+      <section class="household-card">
+        <div class="brand-row">
+          <div class="brand-icon">♡</div>
+          <div><strong>Keuangan Kita</strong><span>Hubungkan akun keluarga</span></div>
+        </div>
+        <p class="eyebrow">LANGKAH TERAKHIR</p>
+        <h1>Buat atau gabung ruang keluarga</h1>
+        <p>Pengguna pertama membuat ruang keluarga. Pasangan kemudian bergabung menggunakan kode undangan.</p>
+
+        <div class="choice-grid">
+          <form id="createHouseholdForm" class="choice-card">
+            <div class="choice-icon">⌂</div>
+            <h2>Buat ruang baru</h2>
+            <p>Pilih ini jika kamu pengguna pertama.</p>
+            <label><span>Nama keluarga</span><input id="householdName" type="text" maxlength="50" placeholder="Contoh: Keluarga Anderson" required /></label>
+            <button class="button primary full" type="submit">Buat ruang keluarga</button>
+          </form>
+
+          <form id="joinHouseholdForm" class="choice-card">
+            <div class="choice-icon gold">#</div>
+            <h2>Gabung pasangan</h2>
+            <p>Masukkan kode dari akun pasanganmu.</p>
+            <label><span>Kode undangan</span><input id="inviteCodeInput" class="code-input" type="text" minlength="12" maxlength="12" placeholder="12 KARAKTER" required /></label>
+            <button class="button secondary full" type="submit">Gabung ruang keluarga</button>
+          </form>
+        </div>
+        <button id="onboardingLogout" class="text-button" type="button">Keluar dari akun</button>
+      </section>
+    </main>
+
+    <div id="app" class="app-shell hidden">
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-brand">
+          <div class="brand-icon">♡</div>
+          <div><strong>Keuangan Kita</strong><span id="sidebarHousehold">Catatan keluarga</span></div>
+          <button id="closeMenu" class="icon-button mobile-only" type="button" aria-label="Tutup menu">×</button>
+        </div>
+
+        <nav aria-label="Menu utama">
+          <button class="nav-button active" data-view="dashboard" type="button"><span>⌂</span>Ringkasan</button>
+          <button class="nav-button" data-view="transactions" type="button"><span>⇄</span>Riwayat</button>
+          <button class="nav-button" data-view="assets" type="button"><span>◇</span>Aset</button>
+        </nav>
+
+        <section class="invite-panel">
+          <span class="mini-label">KODE PASANGAN</span>
+          <strong id="sidebarInviteCode">—</strong>
+          <button id="copyInviteCode" type="button">Salin kode undangan</button>
+        </section>
+
+        <div class="privacy-panel"><span>✓</span><div><strong>Data privat</strong><small>Hanya anggota keluarga.</small></div></div>
+
+        <div class="user-panel">
+          <div id="userAvatar" class="avatar">U</div>
+          <div><strong id="userName">Pengguna</strong><small id="userEmail"></small></div>
+          <button id="logoutButton" class="icon-button" type="button" aria-label="Keluar">↪</button>
+        </div>
+      </aside>
+
+      <button id="menuBackdrop" class="menu-backdrop hidden" type="button" aria-label="Tutup menu"></button>
+
+      <main class="main-content">
+        <header class="topbar">
+          <button id="openMenu" class="icon-button mobile-only" type="button" aria-label="Buka menu">☰</button>
+          <div class="page-heading">
+            <p id="pageEyebrow">RINGKASAN KELUARGA</p>
+            <h1 id="pageTitle">Selamat datang kembali</h1>
+          </div>
+          <div class="top-actions">
+            <button id="topOutcomeButton" class="button secondary" type="button"><span>↗</span><b>Outcome</b></button>
+            <button id="topIncomeButton" class="button primary" type="button"><span>＋</span><b>Income</b></button>
+          </div>
+        </header>
+
+        <section id="loadingState" class="loading-grid">
+          <div></div><div></div><div></div><div></div>
+        </section>
+
+        <section id="dashboardView" class="view hidden">
+          <div class="dashboard-grid">
+            <article class="wealth-card">
+              <div class="wealth-heading">
+                <div><span>Total kekayaan keluarga</span><h2 id="totalWealth">Rp0</h2></div>
+                <div class="wealth-icon">↗</div>
+              </div>
+              <div class="wealth-breakdown">
+                <div><span>Saldo tersedia</span><strong id="availableBalance">Rp0</strong></div>
+                <div><span>Nilai aset</span><strong id="assetValue">Rp0</strong></div>
+              </div>
+              <div class="wealth-footer">✦ Semua angka diperbarui otomatis dari catatan kalian.</div>
+            </article>
+
+            <article class="month-card panel">
+              <div class="section-title"><div><span>Bulan ini</span><h3>Arus keuangan</h3></div><b>▥</b></div>
+              <div class="month-row income"><div class="metric-icon">↙</div><div><span>Income</span><strong id="monthIncome">Rp0</strong></div></div>
+              <div class="month-row outcome"><div class="metric-icon">↗</div><div><span>Outcome</span><strong id="monthOutcome">Rp0</strong></div></div>
+              <div class="month-net"><span>Selisih bulan ini</span><strong id="monthDifference">Rp0</strong></div>
+            </article>
+
+            <article class="allocation-card panel">
+              <div class="section-title"><div><span>Pembagian saldo</span><h3>Milik bersama, tetap tertata</h3></div><b>◌</b></div>
+              <div id="allocationList" class="allocation-list"></div>
+            </article>
+
+            <article class="recent-card panel">
+              <div class="section-title"><div><span>Aktivitas terakhir</span><h3>Riwayat terbaru</h3></div><b>☷</b></div>
+              <div id="recentTransactions"></div>
+            </article>
+
+            <article class="asset-snapshot panel">
+              <div class="section-title"><div><span>Portofolio keluarga</span><h3>Aset tersimpan</h3></div><b>◇</b></div>
+              <div id="assetSnapshot"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="transactionsView" class="view hidden">
+          <article class="content-panel panel">
+            <div class="view-toolbar">
+              <div class="filter-tabs">
+                <button class="active" data-filter="all" type="button">Semua</button>
+                <button data-filter="income" type="button">Income</button>
+                <button data-filter="outcome" type="button">Outcome</button>
+              </div>
+              <div class="view-actions">
+                <button id="viewOutcomeButton" class="button secondary" type="button">＋ Outcome</button>
+                <button id="viewIncomeButton" class="button primary" type="button">＋ Income</button>
+              </div>
+            </div>
+            <div id="transactionsTable" class="data-table"></div>
+          </article>
+        </section>
+
+        <section id="assetsView" class="view hidden">
+          <article class="asset-total-card">
+            <div><span>Total estimasi aset</span><h2 id="assetsTotal">Rp0</h2><p id="assetsCount">0 aset tercatat</p></div>
+            <div class="asset-total-icon">◇</div>
+          </article>
+          <div class="assets-heading"><div><p>PORTOFOLIO KELUARGA</p><h2>Semua aset</h2></div><button id="addAssetButton" class="button primary" type="button">＋ Tambah aset</button></div>
+          <div id="assetsGrid" class="assets-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="transactionDialog" class="modal">
+      <form id="transactionForm" method="dialog">
+        <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
+        <header><h2 id="transactionDialogTitle">Catat income</h2><p id="transactionDialogCopy">Bagi pemasukan untuk suami, istri, dan tabungan.</p></header>
+        <div class="form-grid">
+          <label class="full"><span>Nominal</span><div class="money-field"><b>Rp</b><input id="transactionAmount" inputmode="numeric" placeholder="0" required /></div></label>
+          <label><span>Tanggal</span><input id="transactionDate" type="date" required /></label>
+          <label><span>Kategori</span><select id="transactionCategory" required></select></label>
+          <label class="full"><span>Keterangan <small>opsional</small></span><input id="transactionDescription" type="text" maxlength="100" placeholder="Contoh: Gaji bulan Agustus" /></label>
+
+          <section id="incomeAllocation" class="allocation-form full">
+            <div class="allocation-form-title"><div><strong>Pembagian income</strong><span>Total harus sama dengan nominal income.</span></div><b id="allocationRemaining">Pas</b></div>
+            <label><span>Untuk suami</span><div class="money-field small"><b>Rp</b><input id="husbandAllocation" inputmode="numeric" placeholder="0" /></div></label>
+            <label><span>Untuk istri</span><div class="money-field small"><b>Rp</b><input id="wifeAllocation" inputmode="numeric" placeholder="0" /></div></label>
+            <label><span>Masuk tabungan</span><div class="money-field small"><b>Rp</b><input id="savingsAllocation" inputmode="numeric" placeholder="0" /></div></label>
+          </section>
+
+          <label id="outcomeSourceGroup" class="full hidden"><span>Sumber dana</span><select id="outcomeSource"><option value="husband">Uang suami</option><option value="wife">Uang istri</option><option value="savings">Tabungan</option></select></label>
+          <button id="saveTransactionButton" class="button primary full submit-button" type="submit">Simpan transaksi</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="assetDialog" class="modal">
+      <form id="assetForm" method="dialog">
+        <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
+        <header><h2>Tambah aset keluarga</h2><p>Simpan nilai aset agar total kekayaan selalu terpantau.</p></header>
+        <div class="form-grid">
+          <label><span>Jenis aset</span><select id="assetType" required><option value="">Pilih jenis</option><option>Emas</option><option>Perhiasan</option><option>Tanah</option><option>Kendaraan</option><option>Properti</option><option>Investasi</option><option>Lainnya</option></select></label>
+          <label><span>Nama aset</span><input id="assetName" type="text" maxlength="80" placeholder="Contoh: Emas batangan" required /></label>
+          <label><span>Jumlah</span><input id="assetQuantity" type="number" min="0.01" step="0.01" value="1" required /></label>
+          <label><span>Satuan</span><select id="assetUnit"><option>unit</option><option>gram</option><option>m²</option><option>lot</option><option>lembar</option></select></label>
+          <label><span>Harga beli</span><div class="money-field small"><b>Rp</b><input id="assetPurchaseValue" inputmode="numeric" placeholder="0" required /></div></label>
+          <label><span>Nilai sekarang</span><div class="money-field small"><b>Rp</b><input id="assetCurrentValue" inputmode="numeric" placeholder="0" required /></div></label>
+          <label class="full"><span>Catatan <small>opsional</small></span><input id="assetNotes" type="text" maxlength="120" placeholder="Contoh: Sertifikat atas nama bersama" /></label>
+          <button id="saveAssetButton" class="button primary full submit-button" type="submit">Simpan aset</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="passwordDialog" class="modal">
+      <form id="passwordForm" method="dialog">
+        <header><h2>Buat password baru</h2><p>Masukkan password baru minimal 8 karakter untuk akunmu.</p></header>
+        <div class="form-grid">
+          <label class="full"><span>Password baru</span><input id="newPassword" type="password" minlength="8" autocomplete="new-password" required /></label>
+          <button id="savePasswordButton" class="button primary full submit-button" type="submit">Simpan password baru</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
