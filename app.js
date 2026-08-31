@@ -430,10 +430,10 @@ function getTotals() {
 function renderDashboard() {
   const totals = getTotals();
   $("#totalWealth").textContent = formatRupiah(totals.netWorth);
-  $("#savingsBalance").textContent = formatCompactRupiah(totals.savings);
-  $("#educationBalance").textContent = formatCompactRupiah(totals.education);
-  $("#wifeSavingsBalance").textContent = formatCompactRupiah(totals.wifeSavings);
-  $("#assetValue").textContent = formatCompactRupiah(totals.assetValue);
+  $("#savingsBalance").textContent = formatRupiah(totals.savings);
+  $("#educationBalance").textContent = formatRupiah(totals.education);
+  $("#wifeSavingsBalance").textContent = formatRupiah(totals.wifeSavings);
+  $("#assetValue").textContent = formatRupiah(totals.assetValue);
   $("#monthIncome").textContent = formatRupiah(totals.monthIncome);
   $("#monthOutcome").textContent = formatRupiah(totals.monthOutcome);
   $("#monthDifference").textContent = formatRupiah(totals.monthIncome - totals.monthOutcome);
@@ -465,7 +465,7 @@ function renderDashboard() {
       <div class="asset-preview">
         <div class="asset-symbol">${assetSymbol(asset.asset_type)}</div>
         <div><strong>${escapeHtml(asset.name)}</strong><span>${formatQuantity(asset.quantity)} ${escapeHtml(asset.unit)}</span></div>
-        <b>${formatCompactRupiah(asset.current_value)}</b>
+        <b>${formatRupiah(asset.current_value)}</b>
       </div>
     `).join("")
     : emptyStateHtml("◇", "Belum ada aset", "Tambahkan emas, tanah, perhiasan, kendaraan, atau aset lainnya.", "asset");
@@ -557,8 +557,8 @@ function renderAssets() {
         <h3>${escapeHtml(asset.name)}</h3>
         <p>${formatQuantity(asset.quantity)} ${escapeHtml(asset.unit)}${asset.notes ? ` · ${escapeHtml(asset.notes)}` : ""}</p>
         <div class="asset-values">
-          <div><span>Total harga beli</span><strong>${formatCompactRupiah(asset.purchase_value)}</strong><small>${formatCompactRupiah(Number(asset.purchase_value) / Number(asset.quantity))} / ${escapeHtml(asset.unit)}</small></div>
-          <div><span>Total harga jual</span><strong>${formatCompactRupiah(asset.current_value)}</strong><small>${formatCompactRupiah(Number(asset.current_value) / Number(asset.quantity))} / ${escapeHtml(asset.unit)}</small></div>
+          <div><span>Total harga beli</span><strong>${formatRupiah(asset.purchase_value)}</strong><small>${formatRupiah(Number(asset.purchase_value) / Number(asset.quantity))} / ${escapeHtml(asset.unit)}</small></div>
+          <div><span>Total harga jual</span><strong>${formatRupiah(asset.current_value)}</strong><small>${formatRupiah(Number(asset.current_value) / Number(asset.quantity))} / ${escapeHtml(asset.unit)}</small></div>
         </div>
       </article>
     `).join("")
@@ -578,7 +578,7 @@ function transactionRowHtml(item) {
     <div class="recent-row">
       <div class="transaction-icon ${item.type}">${item.type === "income" ? "↙" : "↗"}</div>
       <div><strong>${escapeHtml(item.category)}</strong><span>${formatDate(item.date)} · ${item.type === "income" ? "Income keluarga" : sourceLabel(item.source)}</span></div>
-      <b class="${item.type === "income" ? "positive" : "negative"}">${item.type === "income" ? "+" : "−"}${formatCompactRupiah(item.amount)}</b>
+      <b class="${item.type === "income" ? "positive" : "negative"}">${item.type === "income" ? "+" : "−"}${formatRupiah(item.amount)}</b>
     </div>
   `;
 }
@@ -910,15 +910,6 @@ function formatRupiah(value) {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
-  }).format(Number(value) || 0);
-}
-
-function formatCompactRupiah(value) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    notation: "compact",
-    maximumFractionDigits: 1,
   }).format(Number(value) || 0);
 }
 
