@@ -207,6 +207,7 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .asset-values div { display: flex; flex-direction: column; }
 .asset-values span { color: #949b96; font-size: 8px; }
 .asset-values strong { margin-top: 4px; font-size: 10px; }
+.asset-values small { margin-top: 3px; color: #959d98; font-size: 7px; }
 
 /* Dialogs */
 .modal { width: min(calc(100% - 30px), 570px); max-height: 92vh; padding: 0; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 24px; color: var(--ink); background: var(--paper); box-shadow: 0 30px 80px rgba(26, 48, 39, .22); }
@@ -222,6 +223,10 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .money-field input { height: 48px; padding: 0; border: 0; box-shadow: none; font-size: 21px; font-weight: 850; }
 .money-field.small { height: 43px; border-radius: 11px; }
 .money-field.small input { height: 39px; font-size: 13px; }
+.asset-calculation { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 13px 15px; border: 1px solid #dfe3dc; border-radius: 13px; background: #f1f4ed; }
+.asset-calculation > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.asset-calculation span { color: #7f8a83; font-size: 8px; }
+.asset-calculation strong { overflow: hidden; color: #1f604b; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .allocation-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 16px; border-radius: 15px; background: #f1f3eb; }
 .allocation-form-title { grid-column: 1 / -1; display: flex; justify-content: space-between; }
 .allocation-form-title > div { display: flex; flex-direction: column; }

@@ -191,8 +191,12 @@ function bindEvents() {
     $(selector).addEventListener("input", (event) => {
       event.target.value = formatNumberInput(event.target.value);
       if (selector.includes("Allocation") || selector === "#transactionAmount") updateAllocationStatus();
+      if (selector.startsWith("#asset")) updateAssetCalculation();
     });
   });
+
+  $("#assetQuantity").addEventListener("input", updateAssetCalculation);
+  $("#assetUnit").addEventListener("change", updateAssetCalculation);
 
   $("#inviteCodeInput").addEventListener("input", (event) => {
     event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -541,8 +545,8 @@ function renderAssets() {
         <h3>${escapeHtml(asset.name)}</h3>
         <p>${formatQuantity(asset.quantity)} ${escapeHtml(asset.unit)}${asset.notes ? ` · ${escapeHtml(asset.notes)}` : ""}</p>
         <div class="asset-values">
-          <div><span>Harga beli</span><strong>${formatCompactRupiah(asset.purchase_value)}</strong></div>
-          <div><span>Nilai sekarang</span><strong>${formatCompactRupiah(asset.current_value)}</strong></div>
+          <div><span>Total harga beli</span><strong>${formatCompactRupiah(asset.purchase_value)}</strong><small>${formatCompactRupiah(Number(asset.purchase_value) / Number(asset.quantity))} / ${escapeHtml(asset.unit)}</small></div>
+          <div><span>Total harga jual</span><strong>${formatCompactRupiah(asset.current_value)}</strong><small>${formatCompactRupiah(Number(asset.current_value) / Number(asset.quantity))} / ${escapeHtml(asset.unit)}</small></div>
         </div>
       </article>
     `).join("")
@@ -730,11 +734,23 @@ function openAssetDialog(assetId = null) {
     $("#assetName").value = asset.name;
     $("#assetQuantity").value = asset.quantity;
     $("#assetUnit").value = asset.unit;
-    $("#assetPurchaseValue").value = formatNumberInput(asset.purchase_value);
-    $("#assetCurrentValue").value = formatNumberInput(asset.current_value);
+    $("#assetPurchaseValue").value = formatNumberInput(Math.round(Number(asset.purchase_value) / Number(asset.quantity)));
+    $("#assetCurrentValue").value = formatNumberInput(Math.round(Number(asset.current_value) / Number(asset.quantity)));
     $("#assetNotes").value = asset.notes || "";
   }
+  updateAssetCalculation();
   openModal($("#assetDialog"));
+}
+
+function updateAssetCalculation() {
+  const quantity = Number($("#assetQuantity").value) || 0;
+  const unit = $("#assetUnit").value || "unit";
+  const purchasePerUnit = parseNumber($("#assetPurchaseValue").value);
+  const currentPerUnit = parseNumber($("#assetCurrentValue").value);
+  $("#assetPurchaseLabel").textContent = `Harga beli per ${unit}`;
+  $("#assetCurrentLabel").textContent = `Harga jual per ${unit}`;
+  $("#assetPurchaseTotal").textContent = formatRupiah(Math.round(quantity * purchasePerUnit));
+  $("#assetCurrentTotal").textContent = formatRupiah(Math.round(quantity * currentPerUnit));
 }
 
 function openModal(dialog) {
@@ -756,10 +772,14 @@ function unlockPageScroll() {
 async function saveAsset(event) {
   event.preventDefault();
   const button = $("#saveAssetButton");
-  const currentValue = parseNumber($("#assetCurrentValue").value);
+  const quantity = Number($("#assetQuantity").value);
+  const purchasePerUnit = parseNumber($("#assetPurchaseValue").value);
+  const currentPerUnit = parseNumber($("#assetCurrentValue").value);
+  const purchaseValue = Math.round(quantity * purchasePerUnit);
+  const currentValue = Math.round(quantity * currentPerUnit);
 
-  if (currentValue < 0) {
-    showToast("Nilai aset tidak valid.", "error");
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    showToast("Jumlah aset harus lebih dari nol.", "error");
     return;
   }
 
@@ -769,9 +789,9 @@ async function saveAsset(event) {
     user_id: state.user.id,
     asset_type: $("#assetType").value,
     name: $("#assetName").value.trim(),
-    quantity: Number($("#assetQuantity").value),
+    quantity,
     unit: $("#assetUnit").value,
-    purchase_value: parseNumber($("#assetPurchaseValue").value),
+    purchase_value: purchaseValue,
     current_value: currentValue,
     notes: $("#assetNotes").value.trim(),
   };

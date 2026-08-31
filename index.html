@@ -225,8 +225,12 @@
           <label><span>Nama aset</span><input id="assetName" type="text" maxlength="80" placeholder="Contoh: Emas batangan" required /></label>
           <label><span>Jumlah</span><input id="assetQuantity" type="number" min="0.01" step="0.01" value="1" required /></label>
           <label><span>Satuan</span><select id="assetUnit"><option>unit</option><option>gram</option><option>m²</option><option>lot</option><option>lembar</option></select></label>
-          <label><span>Harga beli</span><div class="money-field small"><b>Rp</b><input id="assetPurchaseValue" inputmode="numeric" placeholder="0" required /></div></label>
-          <label><span>Nilai sekarang</span><div class="money-field small"><b>Rp</b><input id="assetCurrentValue" inputmode="numeric" placeholder="0" required /></div></label>
+          <label><span id="assetPurchaseLabel">Harga beli per unit</span><div class="money-field small"><b>Rp</b><input id="assetPurchaseValue" inputmode="numeric" placeholder="0" required /></div></label>
+          <label><span id="assetCurrentLabel">Harga jual per unit</span><div class="money-field small"><b>Rp</b><input id="assetCurrentValue" inputmode="numeric" placeholder="0" required /></div></label>
+          <div class="asset-calculation full">
+            <div><span>Total harga beli</span><strong id="assetPurchaseTotal">Rp0</strong></div>
+            <div><span>Total harga jual</span><strong id="assetCurrentTotal">Rp0</strong></div>
+          </div>
           <label class="full"><span>Catatan <small>opsional</small></span><input id="assetNotes" type="text" maxlength="120" placeholder="Contoh: Sertifikat atas nama bersama" /></label>
           <button id="saveAssetButton" class="button primary full submit-button" type="submit">Simpan aset</button>
         </div>
