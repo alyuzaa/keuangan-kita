@@ -164,10 +164,15 @@
         <section id="transactionsView" class="view hidden">
           <article class="content-panel panel">
             <div class="view-toolbar">
-              <div class="filter-tabs">
-                <button class="active" data-filter="all" type="button">Semua</button>
-                <button data-filter="income" type="button">Income</button>
-                <button data-filter="outcome" type="button">Outcome</button>
+              <div class="history-filters">
+                <div class="filter-tabs">
+                  <button class="active" data-filter="all" type="button">Semua</button>
+                  <button data-filter="income" type="button">Income</button>
+                  <button data-filter="outcome" type="button">Outcome</button>
+                </div>
+                <select id="transactionMonthFilter" class="month-filter" aria-label="Pilih bulan riwayat">
+                  <option value="all">Semua bulan</option>
+                </select>
               </div>
               <div class="view-actions">
                 <button id="viewOutcomeButton" class="button secondary" type="button">＋ Outcome</button>
@@ -214,7 +219,7 @@
     <dialog id="assetDialog" class="modal">
       <form id="assetForm" method="dialog">
         <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
-        <header><h2>Tambah aset keluarga</h2><p>Simpan nilai aset agar total kekayaan selalu terpantau.</p></header>
+        <header><h2 id="assetDialogTitle">Tambah aset keluarga</h2><p id="assetDialogCopy">Simpan nilai aset agar total kekayaan selalu terpantau.</p></header>
         <div class="form-grid">
           <label><span>Jenis aset</span><select id="assetType" required><option value="">Pilih jenis</option><option>Emas</option><option>Perhiasan</option><option>Tanah</option><option>Kendaraan</option><option>Properti</option><option>Investasi</option><option>Lainnya</option></select></label>
           <label><span>Nama aset</span><input id="assetName" type="text" maxlength="80" placeholder="Contoh: Emas batangan" required /></label>

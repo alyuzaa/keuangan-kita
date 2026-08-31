@@ -12,6 +12,9 @@ const state = {
   authMode: "login",
   transactionMode: "income",
   transactionFilter: "all",
+  transactionMonth: "all",
+  editingTransactionId: null,
+  editingAssetId: null,
   activeView: "dashboard",
   lockedScrollY: 0,
 };
@@ -155,7 +158,7 @@ function bindEvents() {
   $("#topOutcomeButton").addEventListener("click", () => openTransactionDialog("outcome"));
   $("#viewIncomeButton").addEventListener("click", () => openTransactionDialog("income"));
   $("#viewOutcomeButton").addEventListener("click", () => openTransactionDialog("outcome"));
-  $("#addAssetButton").addEventListener("click", openAssetDialog);
+  $("#addAssetButton").addEventListener("click", () => openAssetDialog());
 
   $("#transactionDialog .modal-close").addEventListener("click", () => $("#transactionDialog").close());
   $("#assetDialog .modal-close").addEventListener("click", () => $("#assetDialog").close());
@@ -170,6 +173,11 @@ function bindEvents() {
       $$(".filter-tabs button").forEach((item) => item.classList.toggle("active", item === button));
       renderTransactions();
     });
+  });
+
+  $("#transactionMonthFilter").addEventListener("change", (event) => {
+    state.transactionMonth = event.target.value;
+    renderTransactions();
   });
 
   [
@@ -355,6 +363,7 @@ function switchView(view) {
 
 function renderAll() {
   renderDashboard();
+  renderTransactionMonthOptions();
   renderTransactions();
   renderAssets();
   switchView(state.activeView);
@@ -448,12 +457,40 @@ function renderDashboard() {
   bindDynamicActions();
 }
 
+function renderTransactionMonthOptions() {
+  const currentYear = new Date().getFullYear();
+  const years = [...new Set([
+    currentYear,
+    ...state.transactions.map((item) => Number(String(item.date).slice(0, 4))).filter(Number.isFinite),
+  ])].sort((a, b) => b - a);
+  const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const options = years.flatMap((year) => monthNames.map((month, index) => {
+    const value = `${year}-${String(index + 1).padStart(2, "0")}`;
+    return `<option value="${value}">${month} ${year}</option>`;
+  }));
+
+  $("#transactionMonthFilter").innerHTML = `<option value="all">Semua bulan</option>${options.join("")}`;
+  const availableValues = new Set(["all", ...years.flatMap((year) => monthNames.map((_, index) => `${year}-${String(index + 1).padStart(2, "0")}`))]);
+  if (!availableValues.has(state.transactionMonth)) state.transactionMonth = "all";
+  $("#transactionMonthFilter").value = state.transactionMonth;
+}
+
 function renderTransactions() {
-  const filtered = state.transactions.filter((item) => state.transactionFilter === "all" || item.type === state.transactionFilter);
+  const filtered = state.transactions.filter((item) => {
+    const matchesType = state.transactionFilter === "all" || item.type === state.transactionFilter;
+    const matchesMonth = state.transactionMonth === "all" || item.date.startsWith(state.transactionMonth);
+    return matchesType && matchesMonth;
+  });
   const container = $("#transactionsTable");
 
   if (!filtered.length) {
-    container.innerHTML = emptyStateHtml("⇄", "Belum ada transaksi", "Income dan outcome yang kalian catat akan muncul di sini.", "income");
+    const filteredByMonth = state.transactionMonth !== "all";
+    container.innerHTML = emptyStateHtml(
+      "⇄",
+      filteredByMonth ? "Belum ada transaksi" : "Belum ada transaksi",
+      filteredByMonth ? "Tidak ada transaksi pada bulan yang dipilih." : "Income dan outcome yang kalian catat akan muncul di sini.",
+      "income",
+    );
     bindDynamicActions();
     return;
   }
@@ -469,13 +506,19 @@ function renderTransactions() {
         <span>${formatDate(item.date, true)}</span>
         <span>${item.type === "income" ? "Suami · Istri · Tabungan" : sourceLabel(item.source)}</span>
         <strong class="${item.type === "income" ? "positive" : "negative"}">${item.type === "income" ? "+" : "−"}${formatRupiah(item.amount)}</strong>
-        <button class="delete-button" data-delete-transaction="${item.id}" type="button" aria-label="Hapus transaksi">⌫</button>
+        <div class="row-actions">
+          <button class="edit-button" data-edit-transaction="${item.id}" type="button" aria-label="Edit transaksi" title="Edit">✎</button>
+          <button class="delete-button" data-delete-transaction="${item.id}" type="button" aria-label="Hapus transaksi" title="Hapus">×</button>
+        </div>
       </div>
     `).join("")}
   `;
 
   $$("[data-delete-transaction]").forEach((button) => {
     button.addEventListener("click", () => deleteTransaction(button.dataset.deleteTransaction));
+  });
+  $$("[data-edit-transaction]").forEach((button) => {
+    button.addEventListener("click", () => editTransaction(button.dataset.editTransaction));
   });
 }
 
@@ -489,7 +532,10 @@ function renderAssets() {
       <article class="asset-card">
         <div class="asset-card-top">
           <div class="asset-symbol">${assetSymbol(asset.asset_type)}</div>
-          <button class="delete-button" data-delete-asset="${asset.id}" type="button" aria-label="Hapus aset">⌫</button>
+          <div class="row-actions">
+            <button class="edit-button" data-edit-asset="${asset.id}" type="button" aria-label="Edit aset" title="Edit">✎</button>
+            <button class="delete-button" data-delete-asset="${asset.id}" type="button" aria-label="Hapus aset" title="Hapus">×</button>
+          </div>
         </div>
         <span>${escapeHtml(asset.asset_type.toUpperCase())}</span>
         <h3>${escapeHtml(asset.name)}</h3>
@@ -504,6 +550,9 @@ function renderAssets() {
 
   $$("[data-delete-asset]").forEach((button) => {
     button.addEventListener("click", () => deleteAsset(button.dataset.deleteAsset));
+  });
+  $$("[data-edit-asset]").forEach((button) => {
+    button.addEventListener("click", () => editAsset(button.dataset.editAsset));
   });
   bindDynamicActions();
 }
@@ -538,19 +587,53 @@ function bindDynamicActions() {
   });
 }
 
-function openTransactionDialog(mode) {
+function editTransaction(id) {
+  const transaction = state.transactions.find((item) => String(item.id) === String(id));
+  if (!transaction) {
+    showToast("Transaksi tidak ditemukan.", "error");
+    return;
+  }
+  openTransactionDialog(transaction.type, transaction.id);
+}
+
+function openTransactionDialog(mode, transactionId = null) {
   state.transactionMode = mode;
+  state.editingTransactionId = transactionId;
   $("#transactionForm").reset();
   $("#transactionDate").value = today;
-  $("#transactionDialogTitle").textContent = mode === "income" ? "Catat income" : "Catat outcome";
-  $("#transactionDialogCopy").textContent = mode === "income"
-    ? "Bagi pemasukan untuk suami, istri, dan tabungan."
-    : "Catat pengeluaran dan pilih sumber dananya.";
+  const isEditing = transactionId !== null;
+  $("#transactionDialogTitle").textContent = isEditing
+    ? `Edit ${mode}`
+    : mode === "income" ? "Catat income" : "Catat outcome";
+  $("#transactionDialogCopy").textContent = isEditing
+    ? "Perbarui data transaksi lalu simpan perubahan."
+    : mode === "income"
+      ? "Bagi pemasukan untuk suami, istri, dan tabungan."
+      : "Catat pengeluaran dan pilih sumber dananya.";
   $("#incomeAllocation").classList.toggle("hidden", mode !== "income");
   $("#outcomeSourceGroup").classList.toggle("hidden", mode !== "outcome");
 
   const categories = mode === "income" ? incomeCategories : outcomeCategories;
   $("#transactionCategory").innerHTML = `<option value="">Pilih kategori</option>${categories.map((item) => `<option>${item}</option>`).join("")}`;
+  const saveButton = $("#saveTransactionButton");
+  delete saveButton.dataset.originalText;
+  saveButton.textContent = isEditing ? "Simpan perubahan" : "Simpan transaksi";
+
+  if (isEditing) {
+    const transaction = state.transactions.find((item) => String(item.id) === String(transactionId));
+    if (!transaction) return;
+    $("#transactionAmount").value = formatNumberInput(transaction.amount);
+    $("#transactionDate").value = transaction.date;
+    $("#transactionCategory").value = transaction.category;
+    $("#transactionDescription").value = transaction.description || "";
+    if (mode === "income") {
+      $("#husbandAllocation").value = formatNumberInput(transaction.husband_allocation);
+      $("#wifeAllocation").value = formatNumberInput(transaction.wife_allocation);
+      $("#savingsAllocation").value = formatNumberInput(transaction.savings_allocation);
+    } else {
+      $("#outcomeSource").value = transaction.source;
+    }
+  }
   updateAllocationStatus();
   openModal($("#transactionDialog"));
 }
@@ -587,12 +670,22 @@ async function saveTransaction(event) {
     savings_allocation: state.transactionMode === "income" ? savings : 0,
   };
 
-  const { error } = await supabase.from("transactions").insert(payload);
+  const isEditing = state.editingTransactionId !== null;
+  const query = supabase.from("transactions");
+  const { error } = isEditing
+    ? await query
+      .update(payload)
+      .eq("id", state.editingTransactionId)
+      .eq("household_id", state.household.id)
+    : await query.insert(payload);
   if (error) {
     showToast(error.message, "error");
   } else {
     $("#transactionDialog").close();
-    showToast(state.transactionMode === "income" ? "Income berhasil dibagikan dan disimpan." : "Outcome berhasil disimpan.");
+    showToast(isEditing
+      ? "Transaksi berhasil diperbarui."
+      : state.transactionMode === "income" ? "Income berhasil dibagikan dan disimpan." : "Outcome berhasil disimpan.");
+    state.editingTransactionId = null;
     await loadFinanceData();
   }
   setButtonBusy(button, false);
@@ -608,9 +701,39 @@ function updateAllocationStatus() {
   $("#saveTransactionButton").disabled = state.transactionMode === "income" && remaining !== 0;
 }
 
-function openAssetDialog() {
+function editAsset(id) {
+  const asset = state.assets.find((item) => String(item.id) === String(id));
+  if (!asset) {
+    showToast("Aset tidak ditemukan.", "error");
+    return;
+  }
+  openAssetDialog(asset.id);
+}
+
+function openAssetDialog(assetId = null) {
+  state.editingAssetId = assetId;
   $("#assetForm").reset();
   $("#assetQuantity").value = "1";
+  const isEditing = assetId !== null;
+  $("#assetDialogTitle").textContent = isEditing ? "Edit aset keluarga" : "Tambah aset keluarga";
+  $("#assetDialogCopy").textContent = isEditing
+    ? "Perbarui data aset agar total kekayaan tetap akurat."
+    : "Simpan nilai aset agar total kekayaan selalu terpantau.";
+  const saveButton = $("#saveAssetButton");
+  delete saveButton.dataset.originalText;
+  saveButton.textContent = isEditing ? "Simpan perubahan" : "Simpan aset";
+
+  if (isEditing) {
+    const asset = state.assets.find((item) => String(item.id) === String(assetId));
+    if (!asset) return;
+    $("#assetType").value = asset.asset_type;
+    $("#assetName").value = asset.name;
+    $("#assetQuantity").value = asset.quantity;
+    $("#assetUnit").value = asset.unit;
+    $("#assetPurchaseValue").value = formatNumberInput(asset.purchase_value);
+    $("#assetCurrentValue").value = formatNumberInput(asset.current_value);
+    $("#assetNotes").value = asset.notes || "";
+  }
   openModal($("#assetDialog"));
 }
 
@@ -653,12 +776,20 @@ async function saveAsset(event) {
     notes: $("#assetNotes").value.trim(),
   };
 
-  const { error } = await supabase.from("assets").insert(payload);
+  const isEditing = state.editingAssetId !== null;
+  const query = supabase.from("assets");
+  const { error } = isEditing
+    ? await query
+      .update(payload)
+      .eq("id", state.editingAssetId)
+      .eq("household_id", state.household.id)
+    : await query.insert(payload);
   if (error) {
     showToast(error.message, "error");
   } else {
     $("#assetDialog").close();
-    showToast("Aset berhasil ditambahkan.");
+    showToast(isEditing ? "Aset berhasil diperbarui." : "Aset berhasil ditambahkan.");
+    state.editingAssetId = null;
     await loadFinanceData();
   }
   setButtonBusy(button, false);
