@@ -250,8 +250,8 @@ async function resetPassword() {
 async function saveNewPassword(event) {
   event.preventDefault();
   const password = $("#newPassword").value;
-  if (password.length < 8) {
-    showToast("Password minimal 8 karakter.", "error");
+  if (password.length < 4) {
+    showToast("Password minimal 4 karakter.", "error");
     return;
   }
 
