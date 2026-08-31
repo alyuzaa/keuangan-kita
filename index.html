@@ -34,7 +34,7 @@
           </label>
           <label>
             <span>Password</span>
-            <input id="authPassword" type="password" autocomplete="current-password" minlength="8" placeholder="Minimal 8 karakter" required />
+            <input id="authPassword" type="password" autocomplete="current-password" minlength="4" placeholder="Minimal 8 karakter" required />
           </label>
           <button id="authSubmit" class="button primary full" type="submit">Masuk</button>
           <button id="forgotPassword" class="text-button" type="button">Lupa password?</button>
@@ -235,9 +235,9 @@
 
     <dialog id="passwordDialog" class="modal">
       <form id="passwordForm" method="dialog">
-        <header><h2>Buat password baru</h2><p>Masukkan password baru minimal 8 karakter untuk akunmu.</p></header>
+        <header><h2>Buat password baru</h2><p>Masukkan password baru minimal 4 karakter untuk akunmu.</p></header>
         <div class="form-grid">
-          <label class="full"><span>Password baru</span><input id="newPassword" type="password" minlength="8" autocomplete="new-password" required /></label>
+          <label class="full"><span>Password baru</span><input id="newPassword" type="password" minlength="4" autocomplete="new-password" required /></label>
           <button id="savePasswordButton" class="button primary full submit-button" type="submit">Simpan password baru</button>
         </div>
       </form>
