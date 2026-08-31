@@ -185,6 +185,7 @@ function bindEvents() {
     "#husbandAllocation",
     "#wifeAllocation",
     "#savingsAllocation",
+    "#educationAllocation",
     "#assetPurchaseValue",
     "#assetCurrentValue",
   ].forEach((selector) => {
@@ -379,6 +380,7 @@ function getTotals() {
   let husband = 0;
   let wife = 0;
   let savings = 0;
+  let education = 0;
   let monthIncome = 0;
   let monthOutcome = 0;
   const now = new Date();
@@ -391,12 +393,14 @@ function getTotals() {
       husband += Number(item.husband_allocation);
       wife += Number(item.wife_allocation);
       savings += Number(item.savings_allocation);
+      education += Number(item.education_allocation ?? 0);
       if (item.date.startsWith(monthKey)) monthIncome += amount;
     } else {
       outcome += amount;
       if (item.source === "husband") husband -= amount;
       if (item.source === "wife") wife -= amount;
       if (item.source === "savings") savings -= amount;
+      if (item.source === "education") education -= amount;
       if (item.date.startsWith(monthKey)) monthOutcome += amount;
     }
   });
@@ -409,6 +413,7 @@ function getTotals() {
     husband,
     wife,
     savings,
+    education,
     monthIncome,
     monthOutcome,
     assetValue,
@@ -421,6 +426,7 @@ function renderDashboard() {
   const totals = getTotals();
   $("#totalWealth").textContent = formatRupiah(totals.netWorth);
   $("#savingsBalance").textContent = formatCompactRupiah(totals.savings);
+  $("#educationBalance").textContent = formatCompactRupiah(totals.education);
   $("#assetValue").textContent = formatCompactRupiah(totals.assetValue);
   $("#monthIncome").textContent = formatRupiah(totals.monthIncome);
   $("#monthOutcome").textContent = formatRupiah(totals.monthOutcome);
@@ -508,7 +514,7 @@ function renderTransactions() {
           <div><strong>${escapeHtml(item.category)}</strong><span>${escapeHtml(item.description || (item.type === "income" ? "Pemasukan keluarga" : "Pengeluaran keluarga"))}</span></div>
         </div>
         <span>${formatDate(item.date, true)}</span>
-        <span>${item.type === "income" ? "Suami · Istri · Tabungan" : sourceLabel(item.source)}</span>
+        <span>${item.type === "income" ? "Suami · Istri · Tabungan · Pendidikan" : sourceLabel(item.source)}</span>
         <strong class="${item.type === "income" ? "positive" : "negative"}">${item.type === "income" ? "+" : "−"}${formatRupiah(item.amount)}</strong>
         <div class="row-actions">
           <button class="edit-button" data-edit-transaction="${item.id}" type="button" aria-label="Edit transaksi" title="Edit">✎</button>
@@ -612,7 +618,7 @@ function openTransactionDialog(mode, transactionId = null) {
   $("#transactionDialogCopy").textContent = isEditing
     ? "Perbarui data transaksi lalu simpan perubahan."
     : mode === "income"
-      ? "Bagi pemasukan untuk suami, istri, dan tabungan."
+      ? "Bagi pemasukan untuk suami, istri, tabungan, dan pendidikan."
       : "Catat pengeluaran dan pilih sumber dananya.";
   $("#incomeAllocation").classList.toggle("hidden", mode !== "income");
   $("#outcomeSourceGroup").classList.toggle("hidden", mode !== "outcome");
@@ -634,6 +640,7 @@ function openTransactionDialog(mode, transactionId = null) {
       $("#husbandAllocation").value = formatNumberInput(transaction.husband_allocation);
       $("#wifeAllocation").value = formatNumberInput(transaction.wife_allocation);
       $("#savingsAllocation").value = formatNumberInput(transaction.savings_allocation);
+      $("#educationAllocation").value = formatNumberInput(transaction.education_allocation ?? 0);
     } else {
       $("#outcomeSource").value = transaction.source;
     }
@@ -648,12 +655,13 @@ async function saveTransaction(event) {
   const husband = parseNumber($("#husbandAllocation").value);
   const wife = parseNumber($("#wifeAllocation").value);
   const savings = parseNumber($("#savingsAllocation").value);
+  const education = parseNumber($("#educationAllocation").value);
 
   if (amount <= 0) {
     showToast("Nominal harus lebih dari nol.", "error");
     return;
   }
-  if (state.transactionMode === "income" && husband + wife + savings !== amount) {
+  if (state.transactionMode === "income" && husband + wife + savings + education !== amount) {
     showToast("Total pembagian harus sama dengan nominal income.", "error");
     return;
   }
@@ -672,6 +680,7 @@ async function saveTransaction(event) {
     husband_allocation: state.transactionMode === "income" ? husband : 0,
     wife_allocation: state.transactionMode === "income" ? wife : 0,
     savings_allocation: state.transactionMode === "income" ? savings : 0,
+    education_allocation: state.transactionMode === "income" ? education : 0,
   };
 
   const isEditing = state.editingTransactionId !== null;
@@ -697,7 +706,10 @@ async function saveTransaction(event) {
 
 function updateAllocationStatus() {
   const amount = parseNumber($("#transactionAmount").value);
-  const allocated = parseNumber($("#husbandAllocation").value) + parseNumber($("#wifeAllocation").value) + parseNumber($("#savingsAllocation").value);
+  const allocated = parseNumber($("#husbandAllocation").value)
+    + parseNumber($("#wifeAllocation").value)
+    + parseNumber($("#savingsAllocation").value)
+    + parseNumber($("#educationAllocation").value);
   const remaining = amount - allocated;
   const status = $("#allocationRemaining");
   status.textContent = remaining === 0 ? "Pas" : `Sisa ${formatRupiah(remaining)}`;
@@ -915,6 +927,7 @@ function formatQuantity(value) {
 function sourceLabel(source) {
   if (source === "husband") return "Uang suami";
   if (source === "wife") return "Uang istri";
+  if (source === "education") return "Uang pendidikan";
   return "Tabungan";
 }
 

@@ -132,9 +132,10 @@
               </div>
               <div class="wealth-breakdown">
                 <div><span>Tabungan</span><strong id="savingsBalance">Rp0</strong></div>
+                <div><span>Uang pendidikan</span><strong id="educationBalance">Rp0</strong></div>
                 <div><span>Nilai aset</span><strong id="assetValue">Rp0</strong></div>
               </div>
-              <div class="wealth-footer">Total mencakup saldo suami, saldo istri, tabungan, dan nilai aset.</div>
+              <div class="wealth-footer">Total mencakup saldo suami, saldo istri, tabungan, dan nilai aset. Uang pendidikan tidak dihitung.</div>
             </article>
 
             <article class="month-card panel">
@@ -196,7 +197,7 @@
     <dialog id="transactionDialog" class="modal">
       <form id="transactionForm" method="dialog">
         <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
-        <header><h2 id="transactionDialogTitle">Catat income</h2><p id="transactionDialogCopy">Bagi pemasukan untuk suami, istri, dan tabungan.</p></header>
+        <header><h2 id="transactionDialogTitle">Catat income</h2><p id="transactionDialogCopy">Bagi pemasukan untuk suami, istri, tabungan, dan pendidikan.</p></header>
         <div class="form-grid">
           <label class="full"><span>Nominal</span><div class="money-field"><b>Rp</b><input id="transactionAmount" inputmode="numeric" placeholder="0" required /></div></label>
           <label><span>Tanggal</span><input id="transactionDate" type="date" required /></label>
@@ -208,9 +209,10 @@
             <label><span>Untuk suami</span><div class="money-field small"><b>Rp</b><input id="husbandAllocation" inputmode="numeric" placeholder="0" /></div></label>
             <label><span>Untuk istri</span><div class="money-field small"><b>Rp</b><input id="wifeAllocation" inputmode="numeric" placeholder="0" /></div></label>
             <label><span>Masuk tabungan</span><div class="money-field small"><b>Rp</b><input id="savingsAllocation" inputmode="numeric" placeholder="0" /></div></label>
+            <label><span>Uang pendidikan</span><div class="money-field small"><b>Rp</b><input id="educationAllocation" inputmode="numeric" placeholder="0" /></div></label>
           </section>
 
-          <label id="outcomeSourceGroup" class="full hidden"><span>Sumber dana</span><select id="outcomeSource"><option value="husband">Uang suami</option><option value="wife">Uang istri</option><option value="savings">Tabungan</option></select></label>
+          <label id="outcomeSourceGroup" class="full hidden"><span>Sumber dana</span><select id="outcomeSource"><option value="husband">Uang suami</option><option value="wife">Uang istri</option><option value="savings">Tabungan</option><option value="education">Uang pendidikan</option></select></label>
           <button id="saveTransactionButton" class="button primary full submit-button" type="submit">Simpan transaksi</button>
         </div>
       </form>

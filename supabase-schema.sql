@@ -30,17 +30,18 @@ create table if not exists public.transactions (
   amount bigint not null check (amount > 0),
   date date not null,
   category text not null check (char_length(category) between 1 and 50),
-  source text check (source is null or source in ('husband', 'wife', 'savings')),
+  source text check (source is null or source in ('husband', 'wife', 'savings', 'education')),
   description text not null default '' check (char_length(description) <= 100),
   husband_allocation bigint not null default 0 check (husband_allocation >= 0),
   wife_allocation bigint not null default 0 check (wife_allocation >= 0),
   savings_allocation bigint not null default 0 check (savings_allocation >= 0),
+  education_allocation bigint not null default 0 check (education_allocation >= 0),
   created_at timestamptz not null default now(),
   constraint transaction_allocation_is_valid check (
     (
       type = 'income'
       and source is null
-      and husband_allocation + wife_allocation + savings_allocation = amount
+      and husband_allocation + wife_allocation + savings_allocation + education_allocation = amount
     )
     or
     (
@@ -49,6 +50,7 @@ create table if not exists public.transactions (
       and husband_allocation = 0
       and wife_allocation = 0
       and savings_allocation = 0
+      and education_allocation = 0
     )
   )
 );

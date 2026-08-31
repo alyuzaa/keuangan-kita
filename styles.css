@@ -121,7 +121,7 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .wealth-heading { display: flex; align-items: start; justify-content: space-between; position: relative; z-index: 1; }
 .wealth-heading span, .wealth-breakdown span { color: #b9c9c2; font-size: 12px; }
 .wealth-heading h2 { margin: 9px 0 0; font-family: Georgia, serif; font-size: clamp(34px, 5vw, 49px); font-weight: 500; letter-spacing: -.035em; }
-.wealth-breakdown { display: flex; gap: 60px; margin-top: 34px; position: relative; z-index: 1; }
+.wealth-breakdown { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-top: 34px; position: relative; z-index: 1; }
 .wealth-breakdown div { display: flex; flex-direction: column; gap: 5px; }
 .wealth-breakdown strong { font-size: 17px; }
 .wealth-footer { margin-top: 29px; padding-top: 16px; position: relative; z-index: 1; border-top: 1px solid rgba(255, 255, 255, .11); color: #aebfb7; font-size: 10px; }
@@ -227,7 +227,7 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .asset-calculation > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .asset-calculation span { color: #7f8a83; font-size: 8px; }
 .asset-calculation strong { overflow: hidden; color: #1f604b; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.allocation-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 16px; border-radius: 15px; background: #f1f3eb; }
+.allocation-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 16px; border-radius: 15px; background: #f1f3eb; }
 .allocation-form-title { grid-column: 1 / -1; display: flex; justify-content: space-between; }
 .allocation-form-title > div { display: flex; flex-direction: column; }
 .allocation-form-title strong { font-size: 11px; }
@@ -312,7 +312,7 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
   .wealth-card, .month-card, .allocation-card, .recent-card, .asset-snapshot { grid-column: 1; grid-row: auto; }
   .wealth-card { min-height: 0; padding: 23px 26px 20px; }
   .wealth-heading h2 { margin-top: 7px; font-size: 32px; }
-  .wealth-breakdown { gap: 27px; margin-top: 23px; }
+  .wealth-breakdown { gap: 12px; margin-top: 23px; }
   .wealth-footer { margin-top: 21px; padding-top: 12px; line-height: 1.35; }
   .month-card { padding: 21px 26px; }
   .month-card .section-title { margin-bottom: 11px; }
@@ -350,5 +350,7 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
   .sidebar { grid-template-columns: minmax(0, 1fr) minmax(120px, .8fr); gap: 12px 10px; }
   .privacy-panel > span { display: none; }
   .privacy-panel { padding-inline: 10px; }
-  .wealth-breakdown { gap: 20px; }
+  .wealth-breakdown { gap: 9px; }
+  .wealth-breakdown span { font-size: 10px; line-height: 1.25; }
+  .wealth-breakdown strong { font-size: 14px; }
 }
