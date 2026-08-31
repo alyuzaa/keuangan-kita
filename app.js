@@ -13,6 +13,7 @@ const state = {
   transactionMode: "income",
   transactionFilter: "all",
   activeView: "dashboard",
+  lockedScrollY: 0,
 };
 
 const incomeCategories = ["Gaji", "Bonus", "Usaha", "Investasi", "Hadiah", "Lainnya"];
@@ -53,7 +54,7 @@ async function initialize() {
     setTimeout(async () => {
       if (event === "PASSWORD_RECOVERY") {
         state.user = session?.user ?? null;
-        $("#passwordDialog").showModal();
+        openModal($("#passwordDialog"));
         return;
       }
       if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
@@ -161,6 +162,7 @@ function bindEvents() {
   $("#transactionForm").addEventListener("submit", saveTransaction);
   $("#assetForm").addEventListener("submit", saveAsset);
   $("#passwordForm").addEventListener("submit", saveNewPassword);
+  $$(".modal").forEach((dialog) => dialog.addEventListener("close", unlockPageScroll));
 
   $$(".filter-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
@@ -550,7 +552,7 @@ function openTransactionDialog(mode) {
   const categories = mode === "income" ? incomeCategories : outcomeCategories;
   $("#transactionCategory").innerHTML = `<option value="">Pilih kategori</option>${categories.map((item) => `<option>${item}</option>`).join("")}`;
   updateAllocationStatus();
-  $("#transactionDialog").showModal();
+  openModal($("#transactionDialog"));
 }
 
 async function saveTransaction(event) {
@@ -609,7 +611,23 @@ function updateAllocationStatus() {
 function openAssetDialog() {
   $("#assetForm").reset();
   $("#assetQuantity").value = "1";
-  $("#assetDialog").showModal();
+  openModal($("#assetDialog"));
+}
+
+function openModal(dialog) {
+  if (!document.body.classList.contains("modal-open")) {
+    state.lockedScrollY = window.scrollY;
+    document.body.style.top = `-${state.lockedScrollY}px`;
+    document.body.classList.add("modal-open");
+  }
+  dialog.showModal();
+}
+
+function unlockPageScroll() {
+  if ($$(".modal[open]").length) return;
+  document.body.classList.remove("modal-open");
+  document.body.style.top = "";
+  window.scrollTo(0, state.lockedScrollY);
 }
 
 async function saveAsset(event) {

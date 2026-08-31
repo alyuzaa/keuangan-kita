@@ -14,6 +14,8 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; color: var(--ink); background: var(--cream); font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif; }
+html:has(.modal[open]), body:has(.modal[open]) { overflow: hidden; overscroll-behavior: none; }
+body.modal-open { position: fixed; left: 0; right: 0; width: 100%; overflow: hidden; touch-action: none; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 .hidden { display: none !important; }
@@ -200,7 +202,7 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .asset-values strong { margin-top: 4px; font-size: 10px; }
 
 /* Dialogs */
-.modal { width: min(calc(100% - 30px), 570px); max-height: 92vh; padding: 0; overflow-y: auto; border: 1px solid var(--line); border-radius: 24px; color: var(--ink); background: var(--paper); box-shadow: 0 30px 80px rgba(26, 48, 39, .22); }
+.modal { width: min(calc(100% - 30px), 570px); max-height: 92vh; padding: 0; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 24px; color: var(--ink); background: var(--paper); box-shadow: 0 30px 80px rgba(26, 48, 39, .22); }
 .modal::backdrop { background: rgba(16, 34, 28, .48); backdrop-filter: blur(3px); }
 .modal > form { position: relative; padding: 28px; }
 .modal-close { position: absolute; top: 17px; right: 17px; width: 32px; height: 32px; border: 0; border-radius: 9px; color: #7c8680; background: #f0efe9; font-size: 19px; }
@@ -251,24 +253,26 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
       "brand user"
       "invite privacy"
       "nav nav";
-    gap: 14px;
-    padding: 20px 17px 0;
+    gap: 10px 14px;
+    padding: 16px 17px 0;
     box-shadow: none;
   }
-  .sidebar-brand { grid-area: brand; min-width: 0; gap: 10px; padding: 0; }
-  .sidebar-brand .brand-icon { width: 48px; height: 48px; border-radius: 50%; }
+  .sidebar-brand { grid-area: brand; min-width: 0; padding: 0; }
+  .sidebar-brand .brand-icon { display: none; }
   .desktop-brand-copy { display: none; }
   .mobile-brand-copy { min-width: 0; display: flex; flex-direction: column; }
   .mobile-brand-copy span { margin: 0 0 2px; color: #b9cbc3; font-size: 9px; }
-  .mobile-brand-copy strong { overflow: hidden; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-brand-copy strong { overflow: visible; font-size: 16px; line-height: 1.08; text-overflow: clip; white-space: normal; }
   .sidebar nav { grid-area: nav; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 2px -17px 0; padding: 5px 17px; background: rgba(7, 30, 22, .28); }
   .nav-button { height: 45px; justify-content: center; padding: 0 8px; border-radius: 10px; color: #c6d4ce; text-align: center; font-size: 12px; }
   .nav-button > span, .nav-button.active::after { display: none; }
   .nav-button:hover, .nav-button.active { color: var(--green-dark); background: #f8f4e8; }
-  .invite-panel { grid-area: invite; min-width: 0; margin: 0; padding: 11px 12px; }
-  .invite-panel strong { margin: 4px 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-  .privacy-panel { grid-area: privacy; min-width: 0; align-items: center; margin: 0; padding: 11px 12px; }
-  .privacy-panel small { line-height: 1.35; }
+  .invite-panel { grid-area: invite; min-width: 0; margin: 0; padding: 8px 11px; border-radius: 13px; }
+  .invite-panel strong { margin: 2px 0; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+  .invite-panel button { font-size: 8px; line-height: 1.2; }
+  .privacy-panel { grid-area: privacy; min-width: 0; align-items: center; margin: 0; padding: 8px 11px; border-radius: 13px; }
+  .privacy-panel strong { font-size: 10px; }
+  .privacy-panel small { font-size: 8px; line-height: 1.2; }
   .user-panel { grid-area: user; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; margin: 0; padding: 4px 0; border: 0; }
   .user-panel .avatar, .user-panel strong { display: none; }
   .user-panel small { color: #d1ddd7; font-size: 9px; }
@@ -294,9 +298,15 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
   .top-actions .button b { display: inline; font-size: 11px; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .wealth-card, .month-card, .allocation-card, .recent-card, .asset-snapshot { grid-column: 1; grid-row: auto; }
-  .wealth-card { min-height: 260px; padding: 27px; }
-  .wealth-heading h2 { font-size: 34px; }
-  .wealth-breakdown { gap: 29px; }
+  .wealth-card { min-height: 0; padding: 23px 26px 20px; }
+  .wealth-heading h2 { margin-top: 7px; font-size: 32px; }
+  .wealth-breakdown { gap: 27px; margin-top: 23px; }
+  .wealth-footer { margin-top: 21px; padding-top: 12px; line-height: 1.35; }
+  .month-card { padding: 21px 26px; }
+  .month-card .section-title { margin-bottom: 11px; }
+  .month-card .month-row { padding: 8px 0; }
+  .month-card .metric-icon { width: 36px; height: 36px; }
+  .month-card .month-net { margin-top: 8px; padding-top: 11px; }
   .allocation-list { grid-template-columns: 1fr; }
   .content-panel { padding: 16px; }
   .view-toolbar { align-items: stretch; flex-direction: column; }
