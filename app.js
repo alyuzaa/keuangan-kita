@@ -150,10 +150,6 @@ function bindEvents() {
     button.addEventListener("click", () => switchView(button.dataset.view));
   });
 
-  $("#openMenu").addEventListener("click", openMenu);
-  $("#closeMenu").addEventListener("click", closeMenu);
-  $("#menuBackdrop").addEventListener("click", closeMenu);
-
   $("#topIncomeButton").addEventListener("click", () => openTransactionDialog("income"));
   $("#topOutcomeButton").addEventListener("click", () => openTransactionDialog("outcome"));
   $("#viewIncomeButton").addEventListener("click", () => openTransactionDialog("income"));
@@ -251,7 +247,7 @@ async function saveNewPassword(event) {
   event.preventDefault();
   const password = $("#newPassword").value;
   if (password.length < 6) {
-    showToast("Password minimal6  karakter.", "error");
+    showToast("Password minimal 6 karakter.", "error");
     return;
   }
 
@@ -327,6 +323,7 @@ function fillProfile() {
   $("#userEmail").textContent = email;
   $("#userAvatar").textContent = name.slice(0, 1).toUpperCase();
   $("#sidebarHousehold").textContent = state.household.name;
+  $("#mobileHouseholdName").textContent = state.household.name;
   $("#sidebarInviteCode").textContent = state.household.invite_code;
 }
 
@@ -342,7 +339,7 @@ async function copyInviteCode() {
 function switchView(view) {
   state.activeView = view;
   const titles = {
-    dashboard: ["RINGKASAN KELUARGA", "Selamat datang kembali"],
+    dashboard: ["BERANDA KELUARGA", "Selamat datang kembali"],
     transactions: ["ARUS KEUANGAN", "Riwayat transaksi"],
     assets: ["KEKAYAAN KELUARGA", "Daftar aset"],
   };
@@ -352,17 +349,6 @@ function switchView(view) {
   $$(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
   $("#pageEyebrow").textContent = titles[view][0];
   $("#pageTitle").textContent = titles[view][1];
-  closeMenu();
-}
-
-function openMenu() {
-  $("#sidebar").classList.add("open");
-  $("#menuBackdrop").classList.remove("hidden");
-}
-
-function closeMenu() {
-  $("#sidebar").classList.remove("open");
-  $("#menuBackdrop").classList.add("hidden");
 }
 
 function renderAll() {
@@ -419,7 +405,7 @@ function getTotals() {
 function renderDashboard() {
   const totals = getTotals();
   $("#totalWealth").textContent = formatRupiah(totals.netWorth);
-  $("#availableBalance").textContent = formatCompactRupiah(totals.cash);
+  $("#savingsBalance").textContent = formatCompactRupiah(totals.savings);
   $("#assetValue").textContent = formatCompactRupiah(totals.assetValue);
   $("#monthIncome").textContent = formatRupiah(totals.monthIncome);
   $("#monthOutcome").textContent = formatRupiah(totals.monthOutcome);
@@ -428,7 +414,6 @@ function renderDashboard() {
   const allocations = [
     { label: "Uang suami", value: totals.husband, icon: "♙", color: "sage" },
     { label: "Uang istri", value: totals.wife, icon: "♡", color: "rose" },
-    { label: "Tabungan", value: totals.savings, icon: "▣", color: "gold" },
   ];
   const max = Math.max(...allocations.map((item) => Math.max(item.value, 0)), 1);
 
@@ -783,6 +768,6 @@ function translateAuthError(message) {
   if (lower.includes("invalid login credentials")) return "Email atau password salah.";
   if (lower.includes("email not confirmed")) return "Email belum dikonfirmasi. Periksa kotak masukmu.";
   if (lower.includes("already registered")) return "Email sudah terdaftar.";
-  if (lower.includes("password")) return "Password minimal 8 karakter.";
+  if (lower.includes("password")) return "Password minimal 6 karakter.";
   return message;
 }

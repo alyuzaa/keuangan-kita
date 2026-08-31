@@ -34,7 +34,7 @@
           </label>
           <label>
             <span>Password</span>
-            <input id="authPassword" type="password" autocomplete="current-password" minlength="6" placeholder="Minimal 8 karakter" required />
+            <input id="authPassword" type="password" autocomplete="current-password" minlength="6" placeholder="Minimal 6 karakter" required />
           </label>
           <button id="authSubmit" class="button primary full" type="submit">Masuk</button>
           <button id="forgotPassword" class="text-button" type="button">Lupa password?</button>
@@ -83,12 +83,12 @@
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-brand">
           <div class="brand-icon">♡</div>
-          <div><strong>Keuangan Kita</strong><span id="sidebarHousehold">Catatan keluarga</span></div>
-          <button id="closeMenu" class="icon-button mobile-only" type="button" aria-label="Tutup menu">×</button>
+          <div class="desktop-brand-copy"><strong>Keuangan Kita</strong><span id="sidebarHousehold">Catatan keluarga</span></div>
+          <div class="mobile-brand-copy"><span>Selamat datang,</span><strong id="mobileHouseholdName">Keluarga</strong></div>
         </div>
 
         <nav aria-label="Menu utama">
-          <button class="nav-button active" data-view="dashboard" type="button"><span>⌂</span>Ringkasan</button>
+          <button class="nav-button active" data-view="dashboard" type="button"><span>⌂</span>Beranda</button>
           <button class="nav-button" data-view="transactions" type="button"><span>⇄</span>Riwayat</button>
           <button class="nav-button" data-view="assets" type="button"><span>◇</span>Aset</button>
         </nav>
@@ -104,17 +104,14 @@
         <div class="user-panel">
           <div id="userAvatar" class="avatar">U</div>
           <div><strong id="userName">Pengguna</strong><small id="userEmail"></small></div>
-          <button id="logoutButton" class="icon-button" type="button" aria-label="Keluar">↪</button>
+          <button id="logoutButton" class="logout-button" type="button" aria-label="Keluar dari akun"><span class="logout-icon">↪</span><span class="logout-label">Keluar</span></button>
         </div>
       </aside>
 
-      <button id="menuBackdrop" class="menu-backdrop hidden" type="button" aria-label="Tutup menu"></button>
-
       <main class="main-content">
         <header class="topbar">
-          <button id="openMenu" class="icon-button mobile-only" type="button" aria-label="Buka menu">☰</button>
           <div class="page-heading">
-            <p id="pageEyebrow">RINGKASAN KELUARGA</p>
+            <p id="pageEyebrow">BERANDA KELUARGA</p>
             <h1 id="pageTitle">Selamat datang kembali</h1>
           </div>
           <div class="top-actions">
@@ -132,34 +129,33 @@
             <article class="wealth-card">
               <div class="wealth-heading">
                 <div><span>Total kekayaan keluarga</span><h2 id="totalWealth">Rp0</h2></div>
-                <div class="wealth-icon">↗</div>
               </div>
               <div class="wealth-breakdown">
-                <div><span>Saldo tersedia</span><strong id="availableBalance">Rp0</strong></div>
+                <div><span>Tabungan</span><strong id="savingsBalance">Rp0</strong></div>
                 <div><span>Nilai aset</span><strong id="assetValue">Rp0</strong></div>
               </div>
-              <div class="wealth-footer">✦ Semua angka diperbarui otomatis dari catatan kalian.</div>
+              <div class="wealth-footer">Total mencakup saldo suami, saldo istri, tabungan, dan nilai aset.</div>
             </article>
 
             <article class="month-card panel">
-              <div class="section-title"><div><span>Bulan ini</span><h3>Arus keuangan</h3></div><b>▥</b></div>
+              <div class="section-title"><div><span>Bulan ini</span><h3>Arus keuangan</h3></div></div>
               <div class="month-row income"><div class="metric-icon">↙</div><div><span>Income</span><strong id="monthIncome">Rp0</strong></div></div>
               <div class="month-row outcome"><div class="metric-icon">↗</div><div><span>Outcome</span><strong id="monthOutcome">Rp0</strong></div></div>
               <div class="month-net"><span>Selisih bulan ini</span><strong id="monthDifference">Rp0</strong></div>
             </article>
 
             <article class="allocation-card panel">
-              <div class="section-title"><div><span>Pembagian saldo</span><h3>Milik bersama, tetap tertata</h3></div><b>◌</b></div>
+              <div class="section-title"><div><span>Pembagian saldo</span><h3>Milik bersama, tetap tertata</h3></div></div>
               <div id="allocationList" class="allocation-list"></div>
             </article>
 
             <article class="recent-card panel">
-              <div class="section-title"><div><span>Aktivitas terakhir</span><h3>Riwayat terbaru</h3></div><b>☷</b></div>
+              <div class="section-title"><div><span>Aktivitas terakhir</span><h3>Riwayat terbaru</h3></div></div>
               <div id="recentTransactions"></div>
             </article>
 
             <article class="asset-snapshot panel">
-              <div class="section-title"><div><span>Portofolio keluarga</span><h3>Aset tersimpan</h3></div><b>◇</b></div>
+              <div class="section-title"><div><span>Portofolio keluarga</span><h3>Aset tersimpan</h3></div></div>
               <div id="assetSnapshot"></div>
             </article>
           </div>
@@ -185,7 +181,6 @@
         <section id="assetsView" class="view hidden">
           <article class="asset-total-card">
             <div><span>Total estimasi aset</span><h2 id="assetsTotal">Rp0</h2><p id="assetsCount">0 aset tercatat</p></div>
-            <div class="asset-total-icon">◇</div>
           </article>
           <div class="assets-heading"><div><p>PORTOFOLIO KELUARGA</p><h2>Semua aset</h2></div><button id="addAssetButton" class="button primary" type="button">＋ Tambah aset</button></div>
           <div id="assetsGrid" class="assets-grid"></div>
