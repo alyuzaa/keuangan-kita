@@ -99,7 +99,7 @@
           <button id="copyInviteCode" type="button">Salin kode undangan</button>
         </section>
 
-        <div class="privacy-panel"><span>✓</span><div><strong>Data privat</strong><small>Hanya anggota keluarga.</small></div></div>
+        <div class="privacy-panel"><span>✓</span><div><strong>Data Private</strong><small>Hanya anggota keluarga.</small></div></div>
 
         <div class="user-panel">
           <div id="userAvatar" class="avatar">U</div>
@@ -131,22 +131,23 @@
                 <div><span>Total kekayaan keluarga</span><h2 id="totalWealth">Rp0</h2></div>
               </div>
               <div class="wealth-breakdown">
-                <div><span>Tabungan</span><strong id="savingsBalance">Rp0</strong></div>
-                <div><span>Uang pendidikan</span><strong id="educationBalance">Rp0</strong></div>
+                <div><span>Tabungan bersama</span><strong id="savingsBalance">Rp0</strong></div>
+                <div><span>Pendidikan</span><strong id="educationBalance">Rp0</strong></div>
+                <div><span>Tabungan istri</span><strong id="wifeSavingsBalance">Rp0</strong></div>
                 <div><span>Nilai aset</span><strong id="assetValue">Rp0</strong></div>
               </div>
-              <div class="wealth-footer">Total mencakup saldo suami, saldo istri, tabungan, dan nilai aset. Uang pendidikan tidak dihitung.</div>
+              <div class="wealth-footer">Total mencakup saldo suami, saldo istri, tabungan bersama, tabungan istri, dan nilai aset. Pendidikan tidak dihitung.</div>
             </article>
 
             <article class="month-card panel">
-              <div class="section-title"><div><span>Bulan ini</span><h3>Arus keuangan</h3></div></div>
+              <div class="section-title"><div><h3>Arus keuangan bulan ini</h3></div></div>
               <div class="month-row income"><div class="metric-icon">↙</div><div><span>Income</span><strong id="monthIncome">Rp0</strong></div></div>
               <div class="month-row outcome"><div class="metric-icon">↗</div><div><span>Outcome</span><strong id="monthOutcome">Rp0</strong></div></div>
               <div class="month-net"><span>Selisih bulan ini</span><strong id="monthDifference">Rp0</strong></div>
             </article>
 
             <article class="allocation-card panel">
-              <div class="section-title"><div><span>Pembagian saldo</span><h3>Milik bersama, tetap tertata</h3></div></div>
+              <div class="section-title"><div><span>Pembagian saldo</span><h3>Sisa saldo bulan ini</h3></div></div>
               <div id="allocationList" class="allocation-list"></div>
             </article>
 
@@ -197,7 +198,7 @@
     <dialog id="transactionDialog" class="modal">
       <form id="transactionForm" method="dialog">
         <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
-        <header><h2 id="transactionDialogTitle">Catat income</h2><p id="transactionDialogCopy">Bagi pemasukan untuk suami, istri, tabungan, dan pendidikan.</p></header>
+        <header><h2 id="transactionDialogTitle">Catat income</h2><p id="transactionDialogCopy">Bagi pemasukan untuk suami, istri, tabungan bersama, tabungan istri, dan pendidikan.</p></header>
         <div class="form-grid">
           <label class="full"><span>Nominal</span><div class="money-field"><b>Rp</b><input id="transactionAmount" inputmode="numeric" placeholder="0" required /></div></label>
           <label><span>Tanggal</span><input id="transactionDate" type="date" required /></label>
@@ -208,11 +209,12 @@
             <div class="allocation-form-title"><div><strong>Pembagian income</strong><span>Total harus sama dengan nominal income.</span></div><b id="allocationRemaining">Pas</b></div>
             <label><span>Untuk suami</span><div class="money-field small"><b>Rp</b><input id="husbandAllocation" inputmode="numeric" placeholder="0" /></div></label>
             <label><span>Untuk istri</span><div class="money-field small"><b>Rp</b><input id="wifeAllocation" inputmode="numeric" placeholder="0" /></div></label>
-            <label><span>Masuk tabungan</span><div class="money-field small"><b>Rp</b><input id="savingsAllocation" inputmode="numeric" placeholder="0" /></div></label>
-            <label><span>Uang pendidikan</span><div class="money-field small"><b>Rp</b><input id="educationAllocation" inputmode="numeric" placeholder="0" /></div></label>
+            <label><span>Tabungan bersama</span><div class="money-field small"><b>Rp</b><input id="savingsAllocation" inputmode="numeric" placeholder="0" /></div></label>
+            <label><span>Tabungan istri</span><div class="money-field small"><b>Rp</b><input id="wifeSavingsAllocation" inputmode="numeric" placeholder="0" /></div></label>
+            <label><span>Pendidikan</span><div class="money-field small"><b>Rp</b><input id="educationAllocation" inputmode="numeric" placeholder="0" /></div></label>
           </section>
 
-          <label id="outcomeSourceGroup" class="full hidden"><span>Sumber dana</span><select id="outcomeSource"><option value="husband">Uang suami</option><option value="wife">Uang istri</option><option value="savings">Tabungan</option><option value="education">Uang pendidikan</option></select></label>
+          <label id="outcomeSourceGroup" class="full hidden"><span>Sumber dana</span><select id="outcomeSource"><option value="husband">Uang suami</option><option value="wife">Uang istri</option><option value="savings">Tabungan bersama</option><option value="wife_savings">Tabungan istri</option><option value="education">Pendidikan</option></select></label>
           <button id="saveTransactionButton" class="button primary full submit-button" type="submit">Simpan transaksi</button>
         </div>
       </form>
