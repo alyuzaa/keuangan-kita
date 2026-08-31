@@ -458,19 +458,19 @@ function renderDashboard() {
 }
 
 function renderTransactionMonthOptions() {
-  const currentYear = new Date().getFullYear();
-  const years = [...new Set([
-    currentYear,
-    ...state.transactions.map((item) => Number(String(item.date).slice(0, 4))).filter(Number.isFinite),
-  ])].sort((a, b) => b - a);
   const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-  const options = years.flatMap((year) => monthNames.map((month, index) => {
-    const value = `${year}-${String(index + 1).padStart(2, "0")}`;
-    return `<option value="${value}">${month} ${year}</option>`;
-  }));
+  const transactionMonths = [...new Set(
+    state.transactions
+      .map((item) => String(item.date).slice(0, 7))
+      .filter((value) => /^\d{4}-\d{2}$/.test(value)),
+  )].sort((a, b) => b.localeCompare(a));
+  const options = transactionMonths.map((value) => {
+    const [year, month] = value.split("-").map(Number);
+    return `<option value="${value}">${monthNames[month - 1]} ${year}</option>`;
+  });
 
   $("#transactionMonthFilter").innerHTML = `<option value="all">Semua bulan</option>${options.join("")}`;
-  const availableValues = new Set(["all", ...years.flatMap((year) => monthNames.map((_, index) => `${year}-${String(index + 1).padStart(2, "0")}`))]);
+  const availableValues = new Set(["all", ...transactionMonths]);
   if (!availableValues.has(state.transactionMonth)) state.transactionMonth = "all";
   $("#transactionMonthFilter").value = state.transactionMonth;
 }
