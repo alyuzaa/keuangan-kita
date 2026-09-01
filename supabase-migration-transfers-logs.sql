@@ -1,7 +1,7 @@
 -- ============================================================
--- MIGRASI v12 — Transfer, penyesuaian, anti-minus, dan audit log
--- Jalankan satu kali di Supabase Dashboard → SQL Editor.
--- Data lama tidak dihapus atau diubah.
+-- KEUANGAN KITA — Transfer, penyesuaian, anti-minus, dan Logs
+-- Jalankan satu kali untuk project yang sudah memakai schema lama.
+-- Aman dijalankan ulang karena object dibuat secara idempotent.
 -- ============================================================
 
 create table if not exists public.balance_transfers (
@@ -11,10 +11,10 @@ create table if not exists public.balance_transfers (
   from_balance text not null check (from_balance in ('husband', 'wife', 'savings', 'wife_savings', 'education')),
   to_balance text not null check (to_balance in ('husband', 'wife', 'savings', 'wife_savings', 'education')),
   amount bigint not null check (amount > 0),
-  date date not null default current_date,
+  date date not null,
   notes text not null default '' check (char_length(notes) <= 120),
   created_at timestamptz not null default now(),
-  constraint balance_transfer_destinations_differ check (from_balance <> to_balance)
+  constraint balance_transfer_different_destination check (from_balance <> to_balance)
 );
 
 create table if not exists public.balance_adjustments (
@@ -37,8 +37,8 @@ create table if not exists public.audit_logs (
   user_id uuid references auth.users(id) on delete set null,
   action text not null check (action in ('create', 'update', 'delete', 'transfer', 'adjustment')),
   entity_type text not null check (entity_type in ('transaction', 'asset', 'transfer', 'adjustment')),
-  entity_id uuid not null,
-  summary text not null check (char_length(summary) between 1 and 160),
+  entity_id uuid,
+  summary text not null check (char_length(summary) between 1 and 180),
   details jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
@@ -50,7 +50,9 @@ create index if not exists balance_adjustments_household_created_idx
 create index if not exists audit_logs_household_created_idx
   on public.audit_logs(household_id, created_at desc);
 
--- Menghitung satu pos saldo dari seluruh sumber data.
+-- Menghitung satu pos saldo dari transaksi, transfer, dan penyesuaian.
+-- excluded_transaction_id dipakai trigger update/delete agar baris lama tidak
+-- dihitung dua kali ketika menguji saldo hasil perubahan.
 create or replace function public.calculate_household_balance(
   target_household_id uuid,
   target_balance_key text,
@@ -63,10 +65,10 @@ security definer
 set search_path = ''
 as $$
 declare
-  calculated_balance bigint := 0;
+  result_balance bigint := 0;
 begin
   if target_balance_key not in ('husband', 'wife', 'savings', 'wife_savings', 'education') then
-    raise exception 'Invalid balance key';
+    raise exception 'Pos saldo tidak valid';
   end if;
 
   select coalesce(sum(
@@ -80,36 +82,31 @@ begin
       else 0
     end
   ), 0)::bigint
-  into calculated_balance
+  into result_balance
   from public.transactions as tx
   where tx.household_id = target_household_id
     and (excluded_transaction_id is null or tx.id <> excluded_transaction_id);
 
-  calculated_balance := calculated_balance + coalesce((
-    select sum(
-      case
-        when transfer.to_balance = target_balance_key then transfer.amount
-        when transfer.from_balance = target_balance_key then -transfer.amount
-        else 0
-      end
-    )::bigint
-    from public.balance_transfers as transfer
-    where transfer.household_id = target_household_id
-  ), 0);
+  select result_balance
+    + coalesce(sum(case when bt.to_balance = target_balance_key then bt.amount else 0 end), 0)::bigint
+    - coalesce(sum(case when bt.from_balance = target_balance_key then bt.amount else 0 end), 0)::bigint
+  into result_balance
+  from public.balance_transfers as bt
+  where bt.household_id = target_household_id;
 
-  calculated_balance := calculated_balance + coalesce((
-    select sum(adjustment.delta)::bigint
-    from public.balance_adjustments as adjustment
-    where adjustment.household_id = target_household_id
-      and adjustment.balance_key = target_balance_key
-  ), 0);
+  select result_balance + coalesce(sum(ba.delta), 0)::bigint
+  into result_balance
+  from public.balance_adjustments as ba
+  where ba.household_id = target_household_id
+    and ba.balance_key = target_balance_key;
 
-  return calculated_balance;
+  return result_balance;
 end;
 $$;
 
--- Semua perubahan transaksi divalidasi terhadap saldo akhir. Penguncian
--- household menyerialkan permintaan dari dua perangkat yang datang bersamaan.
+-- Menolak insert/update/delete transaksi jika hasil akhirnya membuat salah satu
+-- pos saldo menjadi negatif. Lock per-household mencegah dua request bersamaan
+-- sama-sama memakai saldo yang sama.
 create or replace function public.prevent_negative_household_balance()
 returns trigger
 language plpgsql
@@ -117,27 +114,32 @@ security definer
 set search_path = ''
 as $$
 declare
-  target_household_id uuid;
+  affected_household_id uuid;
+  excluded_id uuid;
   balance_key text;
   projected_balance bigint;
-  balance_label text;
 begin
-  target_household_id := case when tg_op = 'DELETE' then old.household_id else new.household_id end;
+  affected_household_id := case when tg_op = 'DELETE' then old.household_id else new.household_id end;
 
-  if tg_op = 'UPDATE' and new.household_id <> old.household_id then
-    raise exception 'Transaction household cannot be changed';
+  if tg_op = 'UPDATE' and old.household_id <> new.household_id then
+    raise exception 'Household transaksi tidak dapat dipindahkan';
   end if;
 
-  perform 1 from public.households where id = target_household_id for update;
+  perform 1
+  from public.households
+  where id = affected_household_id
+  for update;
+
+  excluded_id := case when tg_op in ('UPDATE', 'DELETE') then old.id else null end;
 
   foreach balance_key in array array['husband', 'wife', 'savings', 'wife_savings', 'education'] loop
     projected_balance := public.calculate_household_balance(
-      target_household_id,
+      affected_household_id,
       balance_key,
-      case when tg_op in ('UPDATE', 'DELETE') then old.id else null end
+      excluded_id
     );
 
-    if tg_op <> 'DELETE' then
+    if tg_op in ('INSERT', 'UPDATE') then
       if new.type = 'income' then
         projected_balance := projected_balance + case balance_key
           when 'husband' then new.husband_allocation
@@ -147,24 +149,19 @@ begin
           when 'education' then new.education_allocation
           else 0
         end;
-      elsif new.source = balance_key then
+      elsif new.type = 'outcome' and new.source = balance_key then
         projected_balance := projected_balance - new.amount;
       end if;
     end if;
 
     if projected_balance < 0 then
-      balance_label := case balance_key
-        when 'husband' then 'Uang suami'
-        when 'wife' then 'Uang istri'
-        when 'savings' then 'Tabungan bersama'
-        when 'wife_savings' then 'Tabungan istri'
-        else 'Pendidikan'
-      end;
-      raise exception 'Saldo % tidak mencukupi', balance_label;
+      raise exception 'Saldo % tidak mencukupi. Transaksi membuat saldo menjadi minus.', balance_key;
     end if;
   end loop;
 
-  if tg_op = 'DELETE' then return old; end if;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
   return new;
 end;
 $$;
@@ -174,6 +171,8 @@ create trigger prevent_negative_household_balance_trigger
 before insert or update or delete on public.transactions
 for each row execute function public.prevent_negative_household_balance();
 
+-- Transfer hanya tersedia lewat RPC sehingga validasi saldo dan pencatatan
+-- transfer selalu dilakukan secara atomik di database.
 create or replace function public.create_balance_transfer(
   p_from_balance text,
   p_to_balance text,
@@ -188,39 +187,63 @@ set search_path = ''
 as $$
 declare
   current_user_id uuid := auth.uid();
-  target_household_id uuid;
-  available_balance bigint;
+  member_household_id uuid;
+  current_balance bigint;
   new_transfer_id uuid;
 begin
-  if current_user_id is null then raise exception 'Authentication required'; end if;
+  if current_user_id is null then
+    raise exception 'Authentication required';
+  end if;
   if p_from_balance not in ('husband', 'wife', 'savings', 'wife_savings', 'education')
-    or p_to_balance not in ('husband', 'wife', 'savings', 'wife_savings', 'education') then
+     or p_to_balance not in ('husband', 'wife', 'savings', 'wife_savings', 'education') then
     raise exception 'Pos saldo tidak valid';
   end if;
-  if p_from_balance = p_to_balance then raise exception 'Pos asal dan tujuan harus berbeda'; end if;
-  if p_amount is null or p_amount <= 0 then raise exception 'Nominal transfer harus lebih dari nol'; end if;
-  if p_date is null then raise exception 'Tanggal transfer wajib diisi'; end if;
-  if char_length(coalesce(p_notes, '')) > 120 then raise exception 'Catatan terlalu panjang'; end if;
+  if p_from_balance = p_to_balance then
+    raise exception 'Sumber dan tujuan transfer harus berbeda';
+  end if;
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'Nominal transfer harus lebih dari nol';
+  end if;
+  if p_date is null then
+    raise exception 'Tanggal transfer wajib diisi';
+  end if;
+  if char_length(coalesce(p_notes, '')) > 120 then
+    raise exception 'Catatan maksimal 120 karakter';
+  end if;
 
-  select member.household_id into target_household_id
+  select member.household_id
+  into member_household_id
   from public.household_members as member
   where member.user_id = current_user_id;
-  if target_household_id is null then raise exception 'Household member not found'; end if;
 
-  perform 1 from public.households where id = target_household_id for update;
-  available_balance := public.calculate_household_balance(target_household_id, p_from_balance);
-  if available_balance < p_amount then raise exception 'Saldo sumber tidak mencukupi'; end if;
+  if member_household_id is null then
+    raise exception 'Household member not found';
+  end if;
+
+  perform 1
+  from public.households
+  where id = member_household_id
+  for update;
+
+  current_balance := public.calculate_household_balance(member_household_id, p_from_balance);
+  if current_balance < p_amount then
+    raise exception 'Saldo sumber tidak mencukupi';
+  end if;
 
   insert into public.balance_transfers (
     household_id, user_id, from_balance, to_balance, amount, date, notes
   ) values (
-    target_household_id, current_user_id, p_from_balance, p_to_balance, p_amount, p_date, btrim(coalesce(p_notes, ''))
-  ) returning id into new_transfer_id;
+    member_household_id, current_user_id, p_from_balance, p_to_balance,
+    p_amount, p_date, btrim(coalesce(p_notes, ''))
+  )
+  returning id into new_transfer_id;
 
   return new_transfer_id;
 end;
 $$;
 
+-- Penyesuaian menyimpan saldo sebelum/sesudah dan delta. Riwayat transaksi
+-- tidak diubah, sehingga koreksi tetap dapat diaudit melalui tab Logs.
 create or replace function public.adjust_household_balance(
   p_balance_key text,
   p_new_balance bigint,
@@ -233,41 +256,56 @@ set search_path = ''
 as $$
 declare
   current_user_id uuid := auth.uid();
-  target_household_id uuid;
-  current_balance bigint;
+  member_household_id uuid;
+  old_balance bigint;
   new_adjustment_id uuid;
+  clean_notes text := btrim(coalesce(p_notes, ''));
 begin
-  if current_user_id is null then raise exception 'Authentication required'; end if;
+  if current_user_id is null then
+    raise exception 'Authentication required';
+  end if;
   if p_balance_key not in ('husband', 'wife', 'savings', 'wife_savings', 'education') then
     raise exception 'Pos saldo tidak valid';
   end if;
-  if p_new_balance is null or p_new_balance < 0 then raise exception 'Saldo baru tidak boleh minus'; end if;
-  if char_length(btrim(coalesce(p_notes, ''))) not between 3 and 120 then
-    raise exception 'Alasan penyesuaian harus berisi 3 sampai 120 karakter';
+  if p_new_balance is null or p_new_balance < 0 then
+    raise exception 'Saldo baru tidak boleh minus';
+  end if;
+  if char_length(clean_notes) not between 3 and 120 then
+    raise exception 'Alasan penyesuaian harus 3 sampai 120 karakter';
   end if;
 
-  select member.household_id into target_household_id
+  select member.household_id
+  into member_household_id
   from public.household_members as member
   where member.user_id = current_user_id;
-  if target_household_id is null then raise exception 'Household member not found'; end if;
 
-  perform 1 from public.households where id = target_household_id for update;
-  current_balance := public.calculate_household_balance(target_household_id, p_balance_key);
-  if current_balance = p_new_balance then raise exception 'Saldo baru masih sama dengan saldo saat ini'; end if;
+  if member_household_id is null then
+    raise exception 'Household member not found';
+  end if;
+
+  perform 1
+  from public.households
+  where id = member_household_id
+  for update;
+
+  old_balance := public.calculate_household_balance(member_household_id, p_balance_key);
+  if old_balance = p_new_balance then
+    raise exception 'Saldo baru sama dengan saldo saat ini';
+  end if;
 
   insert into public.balance_adjustments (
     household_id, user_id, balance_key, previous_balance, new_balance, delta, notes
   ) values (
-    target_household_id, current_user_id, p_balance_key, current_balance, p_new_balance,
-    p_new_balance - current_balance, btrim(p_notes)
-  ) returning id into new_adjustment_id;
+    member_household_id, current_user_id, p_balance_key, old_balance,
+    p_new_balance, p_new_balance - old_balance, clean_notes
+  )
+  returning id into new_adjustment_id;
 
   return new_adjustment_id;
 end;
 $$;
 
--- Audit log dibuat di database sehingga perubahan dari perangkat mana pun
--- tetap tercatat dan tidak bergantung pada JavaScript klien.
+-- Satu trigger audit untuk transaksi, aset, transfer, dan penyesuaian.
 create or replace function public.write_finance_audit_log()
 returns trigger
 language plpgsql
@@ -275,55 +313,53 @@ security definer
 set search_path = ''
 as $$
 declare
-  target_household_id uuid;
-  actor_user_id uuid;
-  target_entity_id uuid;
-  log_action text;
-  log_entity_type text;
-  log_summary text;
-  log_details jsonb;
+  record_household_id uuid;
+  record_user_id uuid;
+  record_id uuid;
+  record_action text;
+  record_entity_type text;
+  record_summary text;
+  record_details jsonb;
 begin
-  target_household_id := case when tg_op = 'DELETE' then old.household_id else new.household_id end;
-  actor_user_id := coalesce(auth.uid(), case when tg_op = 'DELETE' then old.user_id else new.user_id end);
-  target_entity_id := case when tg_op = 'DELETE' then old.id else new.id end;
-  log_details := jsonb_build_object(
+  record_household_id := case when tg_op = 'DELETE' then old.household_id else new.household_id end;
+  record_user_id := coalesce(auth.uid(), case when tg_op = 'DELETE' then old.user_id else new.user_id end);
+  record_id := case when tg_op = 'DELETE' then old.id else new.id end;
+
+  if tg_table_name = 'transactions' then
+    record_entity_type := 'transaction';
+    record_action := case when tg_op = 'INSERT' then 'create' else lower(tg_op) end;
+    record_summary := 'Transaksi ' || (case when tg_op = 'DELETE' then old.category else new.category end) ||
+      case tg_op when 'INSERT' then ' ditambahkan' when 'UPDATE' then ' diubah' else ' dihapus' end;
+  elsif tg_table_name = 'assets' then
+    record_entity_type := 'asset';
+    record_action := case when tg_op = 'INSERT' then 'create' else lower(tg_op) end;
+    record_summary := 'Aset ' || (case when tg_op = 'DELETE' then old.name else new.name end) ||
+      case tg_op when 'INSERT' then ' ditambahkan' when 'UPDATE' then ' diubah' else ' dihapus' end;
+  elsif tg_table_name = 'balance_transfers' then
+    record_entity_type := 'transfer';
+    record_action := 'transfer';
+    record_summary := 'Transfer saldo dicatat';
+  else
+    record_entity_type := 'adjustment';
+    record_action := 'adjustment';
+    record_summary := 'Penyesuaian saldo dicatat';
+  end if;
+
+  record_details := jsonb_build_object(
     'before', case when tg_op in ('UPDATE', 'DELETE') then to_jsonb(old) else null end,
     'after', case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) else null end
   );
 
-  if tg_table_name = 'transactions' then
-    log_action := case tg_op when 'INSERT' then 'create' when 'UPDATE' then 'update' else 'delete' end;
-    log_entity_type := 'transaction';
-    log_summary := case tg_op
-      when 'INSERT' then 'Menambahkan ' || new.type
-      when 'UPDATE' then 'Mengubah ' || new.type
-      else 'Menghapus ' || old.type
-    end;
-  elsif tg_table_name = 'assets' then
-    log_action := case tg_op when 'INSERT' then 'create' when 'UPDATE' then 'update' else 'delete' end;
-    log_entity_type := 'asset';
-    log_summary := case tg_op
-      when 'INSERT' then 'Menambahkan aset'
-      when 'UPDATE' then 'Mengubah aset'
-      else 'Menghapus aset'
-    end;
-  elsif tg_table_name = 'balance_transfers' then
-    log_action := 'transfer';
-    log_entity_type := 'transfer';
-    log_summary := 'Mentransfer saldo';
-  else
-    log_action := 'adjustment';
-    log_entity_type := 'adjustment';
-    log_summary := 'Menyesuaikan saldo';
-  end if;
-
   insert into public.audit_logs (
     household_id, user_id, action, entity_type, entity_id, summary, details
   ) values (
-    target_household_id, actor_user_id, log_action, log_entity_type, target_entity_id, log_summary, log_details
+    record_household_id, record_user_id, record_action, record_entity_type,
+    record_id, left(record_summary, 180), record_details
   );
 
-  if tg_op = 'DELETE' then return old; end if;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
   return new;
 end;
 $$;
@@ -354,22 +390,29 @@ alter table public.audit_logs enable row level security;
 
 drop policy if exists "Members can read balance transfers" on public.balance_transfers;
 create policy "Members can read balance transfers"
-on public.balance_transfers for select to authenticated
+on public.balance_transfers
+for select
+to authenticated
 using ((select public.is_household_member(household_id)));
 
 drop policy if exists "Members can read balance adjustments" on public.balance_adjustments;
 create policy "Members can read balance adjustments"
-on public.balance_adjustments for select to authenticated
+on public.balance_adjustments
+for select
+to authenticated
 using ((select public.is_household_member(household_id)));
 
 drop policy if exists "Members can read audit logs" on public.audit_logs;
 create policy "Members can read audit logs"
-on public.audit_logs for select to authenticated
+on public.audit_logs
+for select
+to authenticated
 using ((select public.is_household_member(household_id)));
 
 revoke all on public.balance_transfers from public, anon, authenticated;
 revoke all on public.balance_adjustments from public, anon, authenticated;
 revoke all on public.audit_logs from public, anon, authenticated;
+
 grant select on public.balance_transfers to authenticated;
 grant select on public.balance_adjustments to authenticated;
 grant select on public.audit_logs to authenticated;
@@ -379,5 +422,6 @@ revoke execute on function public.prevent_negative_household_balance() from publ
 revoke execute on function public.write_finance_audit_log() from public, anon, authenticated;
 revoke execute on function public.create_balance_transfer(text, text, bigint, date, text) from public, anon;
 revoke execute on function public.adjust_household_balance(text, bigint, text) from public, anon;
+
 grant execute on function public.create_balance_transfer(text, text, bigint, date, text) to authenticated;
 grant execute on function public.adjust_household_balance(text, bigint, text) to authenticated;

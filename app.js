@@ -33,6 +33,7 @@ const balanceOptions = [
   { key: "wife_savings", label: "Tabungan istri" },
   { key: "education", label: "Pendidikan" },
 ];
+const chartColors = ["#bd5a58", "#d6a84d", "#3f806b", "#728e60", "#b97891", "#8069a8", "#d07c4f", "#68889c"];
 const today = new Date().toISOString().slice(0, 10);
 
 const isConfigured =
@@ -213,6 +214,7 @@ function bindEvents() {
   $("#transactionDialog .modal-close").addEventListener("click", () => $("#transactionDialog").close());
   $("#assetDialog .modal-close").addEventListener("click", () => $("#assetDialog").close());
   $("#userNameDialog .modal-close").addEventListener("click", () => $("#userNameDialog").close());
+  $("#transactionDetailDialog .modal-close").addEventListener("click", () => $("#transactionDetailDialog").close());
   $("#transferDialog .modal-close").addEventListener("click", () => $("#transferDialog").close());
   $("#adjustmentDialog .modal-close").addEventListener("click", () => $("#adjustmentDialog").close());
   $("#transactionForm").addEventListener("submit", saveTransaction);
@@ -228,6 +230,7 @@ function bindEvents() {
       state.transactionFilter = button.dataset.filter;
       $$(".filter-tabs button").forEach((item) => item.classList.toggle("active", item === button));
       renderTransactions();
+      renderHistoryChart();
     });
   });
 
@@ -236,12 +239,14 @@ function bindEvents() {
       state.transactionMemberFilter = button.dataset.memberFilter;
       $$(".member-filter-tabs button").forEach((item) => item.classList.toggle("active", item === button));
       renderTransactions();
+      renderHistoryChart();
     });
   });
 
   $("#transactionMonthFilter").addEventListener("change", (event) => {
     state.transactionMonth = event.target.value;
     renderTransactions();
+    renderHistoryChart();
   });
 
   [
@@ -474,6 +479,7 @@ function renderAll() {
   renderDashboard();
   renderTransactionMonthOptions();
   renderTransactions();
+  renderHistoryChart();
   renderAssets();
   renderLogs();
   switchView(state.activeView);
@@ -643,7 +649,7 @@ function renderTransactions() {
   container.innerHTML = `
     <div class="table-head"><span>TRANSAKSI</span><span>SUMBER/ALOKASI</span><span>NOMINAL</span><span></span></div>
     ${filtered.map((item) => `
-      <div class="table-row">
+      <div class="table-row viewable-row" data-view-transaction="${item.id}" role="button" tabindex="0" aria-label="Lihat detail transaksi ${escapeHtml(item.category)}">
         <div class="transaction-name">
           <div class="transaction-icon ${item.type}">${item.type === "income" ? "↙" : "↗"}</div>
           ${transactionDetailsHtml(item)}
@@ -664,6 +670,82 @@ function renderTransactions() {
   $$("[data-edit-transaction]").forEach((button) => {
     button.addEventListener("click", () => editTransaction(button.dataset.editTransaction));
   });
+
+  $$("[data-view-transaction]").forEach((row) => {
+    const openDetail = (event) => {
+      if (event.target.closest(".row-actions")) return;
+      openTransactionDetail(row.dataset.viewTransaction);
+    };
+    row.addEventListener("click", openDetail);
+    row.addEventListener("keydown", (event) => {
+      if ((event.key === "Enter" || event.key === " ") && !event.target.closest(".row-actions")) {
+        event.preventDefault();
+        openTransactionDetail(row.dataset.viewTransaction);
+      }
+    });
+  });
+}
+
+function renderHistoryChart() {
+  const chartType = state.transactionFilter === "income" ? "income" : "outcome";
+  const relevant = state.transactions.filter((item) => {
+    const matchesType = item.type === chartType;
+    const matchesMonth = state.transactionMonth === "all" || item.date.startsWith(state.transactionMonth);
+    const member = transactionMember(item);
+    const matchesMember = state.transactionMemberFilter === "all" || member?.role === state.transactionMemberFilter;
+    return matchesType && matchesMonth && matchesMember;
+  });
+
+  const grouped = new Map();
+  relevant.forEach((item) => grouped.set(item.category, (grouped.get(item.category) || 0) + Number(item.amount)));
+  const categories = [...grouped.entries()]
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+  const total = categories.reduce((sum, item) => sum + item.value, 0);
+  const isIncome = chartType === "income";
+  const scopeLabel = state.transactionMemberFilter === "owner"
+    ? "Suami"
+    : state.transactionMemberFilter === "member" ? "Istri" : "Semua pencatat";
+
+  $("#historyChartEyebrow").textContent = isIncome ? "RINGKASAN INCOME" : "RINGKASAN OUTCOME";
+  $("#historyChartTitle").textContent = isIncome ? "Komposisi pemasukan" : "Komposisi pengeluaran";
+  $("#historyChartScope").textContent = scopeLabel;
+
+  if (!total) {
+    $("#historyChartContent").innerHTML = `
+      <div class="chart-empty">
+        <div>◌</div>
+        <strong>Belum ada ${isIncome ? "pemasukan" : "pengeluaran"}</strong>
+        <span>Tidak ada data pada filter yang dipilih.</span>
+      </div>`;
+    return;
+  }
+
+  let offset = 0;
+  const segments = categories.map((item) => {
+    const percentage = item.value / total * 100;
+    const visiblePercentage = percentage - Math.min(0.65, percentage * 0.15);
+    const segment = `<circle class="history-donut-segment" cx="110" cy="110" r="77" pathLength="100" stroke="${historyCategoryColor(item.name, chartType)}" stroke-dasharray="${visiblePercentage} ${100 - visiblePercentage}" stroke-dashoffset="${-offset}"><title>${escapeHtml(item.name)}: ${formatRupiah(item.value)} (${formatPercentage(percentage)})</title></circle>`;
+    offset += percentage;
+    return segment;
+  }).join("");
+
+  $("#historyChartContent").innerHTML = `
+    <div class="history-chart-layout">
+      <div class="history-donut-wrap">
+        <svg class="history-donut" viewBox="0 0 220 220" role="img" aria-label="${isIncome ? "Komposisi pemasukan" : "Komposisi pengeluaran"} berdasarkan kategori">
+          <circle class="history-donut-track" cx="110" cy="110" r="77"></circle>
+          ${segments}
+        </svg>
+        <div class="history-donut-center"><span>Total ${isIncome ? "income" : "outcome"}</span><strong>${formatRupiah(total)}</strong></div>
+      </div>
+      <div class="history-chart-legend">
+        ${categories.map((item) => {
+          const percentage = item.value / total * 100;
+          return `<div class="chart-legend-row"><i style="background:${historyCategoryColor(item.name, chartType)}"></i><div><strong>${escapeHtml(item.name)}</strong><span>${formatPercentage(percentage)}</span></div><b>${formatRupiah(item.value)}</b></div>`;
+        }).join("")}
+      </div>
+    </div>`;
 }
 
 function renderAssets() {
@@ -708,7 +790,7 @@ function renderLogs() {
       <div class="empty-state">
         <div class="empty-icon">≡</div>
         <h4>Belum ada log</h4>
-        <p>Aktivitas baru akan tercatat setelah pembaruan database ini dipasang.</p>
+        <p>Aktivitas baru akan tercatat setelah pembaruan database dipasang.</p>
       </div>`;
     return;
   }
@@ -797,6 +879,47 @@ function transactionDetailsHtml(item) {
       <small class="member-name ${role}" title="Dicatat oleh ${roleLabel}">${escapeHtml(displayName)}</small>
     </div>
   `;
+}
+
+function transactionDisplayName(item) {
+  const member = transactionMember(item);
+  const fallbackName = item.user_id === state.user?.id ? (state.user.email?.split("@")[0] || "Pengguna") : "Pengguna";
+  return member?.display_name || fallbackName;
+}
+
+function openTransactionDetail(id) {
+  const transaction = state.transactions.find((item) => String(item.id) === String(id));
+  if (!transaction) {
+    showToast("Transaksi tidak ditemukan.", "error");
+    return;
+  }
+
+  const isIncome = transaction.type === "income";
+  const typeElement = $("#detailTransactionType");
+  typeElement.textContent = isIncome ? "INCOME" : "OUTCOME";
+  typeElement.className = `detail-type ${transaction.type}`;
+  const amountElement = $("#detailTransactionAmount");
+  amountElement.textContent = `${isIncome ? "+" : "−"}${formatRupiah(transaction.amount)}`;
+  amountElement.className = `detail-amount ${isIncome ? "positive" : "negative"}`;
+
+  const basicDetails = `
+    <div class="detail-field"><span>Kategori</span><strong>${escapeHtml(transaction.category)}</strong></div>
+    <div class="detail-field"><span>Tanggal</span><strong>${formatDate(transaction.date, true)}</strong></div>
+    <div class="detail-field detail-field-full"><span>Keterangan</span><strong>${escapeHtml(transaction.description || (isIncome ? "Pemasukan keluarga" : "Pengeluaran keluarga"))}</strong></div>
+    <div class="detail-field"><span>Dicatat oleh</span><strong>${escapeHtml(transactionDisplayName(transaction))}</strong></div>`;
+
+  const financeDetails = isIncome
+    ? `<section class="detail-allocation detail-field-full"><span>Pembagian income</span><div>
+        <p><span>Uang suami</span><strong>${formatRupiah(transaction.husband_allocation)}</strong></p>
+        <p><span>Uang istri</span><strong>${formatRupiah(transaction.wife_allocation)}</strong></p>
+        <p><span>Tabungan bersama</span><strong>${formatRupiah(transaction.savings_allocation)}</strong></p>
+        <p><span>Tabungan istri</span><strong>${formatRupiah(transaction.wife_savings_allocation ?? 0)}</strong></p>
+        <p><span>Pendidikan</span><strong>${formatRupiah(transaction.education_allocation ?? 0)}</strong></p>
+      </div></section>`
+    : `<div class="detail-field"><span>Sumber dana</span><strong>${escapeHtml(sourceLabel(transaction.source))}</strong></div>`;
+
+  $("#transactionDetailBody").innerHTML = basicDetails + financeDetails;
+  openModal($("#transactionDetailDialog"));
 }
 
 function emptyStateHtml(icon, title, copy, action) {
@@ -963,9 +1086,7 @@ function updateTransferFields() {
   const source = $("#transferSource").value || "husband";
   const previousDestination = $("#transferDestination").value;
   $("#transferDestination").innerHTML = balanceOptionsHtml(source);
-  if (previousDestination && previousDestination !== source) {
-    $("#transferDestination").value = previousDestination;
-  }
+  if (previousDestination && previousDestination !== source) $("#transferDestination").value = previousDestination;
   $("#transferAvailable").textContent = formatRupiah(balanceValue(getTotals(), source));
 }
 
@@ -1030,10 +1151,6 @@ async function saveAdjustment(event) {
   const currentBalance = balanceValue(getTotals(), balanceKey);
   const notes = $("#adjustmentNotes").value.trim();
 
-  if (newBalance < 0) {
-    showToast("Saldo baru tidak boleh minus.", "error");
-    return;
-  }
   if (newBalance === currentBalance) {
     showToast("Saldo baru masih sama dengan saldo saat ini.", "error");
     return;
@@ -1272,6 +1389,18 @@ function formatDateTime(value) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatPercentage(value) {
+  return `${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 }).format(value)}%`;
+}
+
+function historyCategoryColor(category, type) {
+  const categories = type === "income" ? incomeCategories : outcomeCategories;
+  const index = categories.indexOf(category);
+  if (index >= 0) return chartColors[index % chartColors.length];
+  const hash = [...String(category)].reduce((total, character) => total + character.charCodeAt(0), 0);
+  return chartColors[hash % chartColors.length];
 }
 
 function formatQuantity(value) {

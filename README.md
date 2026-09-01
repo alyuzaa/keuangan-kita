@@ -9,14 +9,16 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 - Login dan pendaftaran dengan email + password.
 - Dua akun terpisah dalam satu ruang keluarga.
 - Kode undangan 12 karakter untuk menghubungkan akun pasangan.
-- Income dapat dibagi ke uang suami, uang istri, tabungan bersama, tabungan istri, dan pendidikan.
-- Outcome memilih salah satu dari lima pos saldo dan otomatis ditolak jika saldo tidak cukup.
-- Transfer saldo antar-pos tanpa mencatat income/outcome baru.
-- Penyesuaian saldo dari kartu Total kekayaan dengan alasan yang wajib diisi.
-- Logs aktivitas untuk tambah, edit, hapus, transfer, dan penyesuaian.
+- Income dibagi menjadi uang suami, uang istri, tabungan bersama, tabungan istri, dan pendidikan.
+- Outcome memilih sumber dana dan dilindungi dari saldo minus, termasuk kategori Kecantikan.
+- Transfer saldo antar-pos tanpa mencatat income/outcome.
+- Penyesuaian saldo dengan alasan dan jejak perubahan.
 - Pencatatan emas, tanah, perhiasan, kendaraan, properti, dan aset lainnya.
 - Dashboard total kekayaan, saldo tersedia, nilai aset, dan arus bulan berjalan.
-- Riwayat transaksi dan penghapusan data.
+- Riwayat dapat difilter berdasarkan jenis, bulan, dan pencatat (suami/istri).
+- Baris riwayat dapat diketuk untuk melihat detail tanpa masuk ke mode edit.
+- Donut chart kategori pada mobile mengikuti filter Riwayat yang aktif.
+- Edit/hapus transaksi dan aset, serta tab Logs yang tidak dapat diubah.
 - Row Level Security (RLS): pengguna tidak bisa membaca household lain.
 - Tampilan responsif untuk HP dan desktop.
 
@@ -28,8 +30,8 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 | `styles.css` | Seluruh tampilan dan versi responsif |
 | `app.js` | Login, household, perhitungan, dan operasi database |
 | `config.js` | URL dan publishable/anon key Supabase |
-| `supabase-schema.sql` | Tabel, database functions, grants, dan RLS |
-| `supabase-migration-transfers-logs.sql` | Migrasi aman untuk instalasi lama ke fitur versi 12 |
+| `supabase-schema.sql` | Schema lengkap: tabel, functions, anti-minus, audit, grants, dan RLS |
+| `supabase-migration-transfers-logs.sql` | Upgrade instalasi lama untuk transfer, penyesuaian, anti-minus, dan Logs |
 | `vercel.json` | Security headers untuk Vercel |
 | `favicon.svg` | Ikon aplikasi |
 
@@ -52,11 +54,12 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 SQL tersebut juga mengaktifkan RLS. Jangan menonaktifkan RLS karena itulah
 lapisan yang membatasi data setiap keluarga.
 
-### Jika aplikasi lama sudah pernah dipasang
+### Jika database sudah pernah dipasang
 
-Jangan jalankan ulang atau menghapus tabel lama. Buka **SQL Editor**, salin
-seluruh isi `supabase-migration-transfers-logs.sql`, lalu klik **Run** satu kali.
-Migrasi ini mempertahankan seluruh transaksi, aset, akun, dan household lama.
+Untuk database dari versi lama, jalankan isi
+`supabase-migration-transfers-logs.sql` melalui SQL Editor sebelum mengunggah
+frontend versi ini. Jika migration tersebut sudah pernah berhasil dijalankan,
+tidak perlu menjalankannya lagi.
 
 ## 2. Menyambungkan frontend ke Supabase
 

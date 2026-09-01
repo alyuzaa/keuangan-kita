@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Pencatatan keuangan pribadi untuk suami dan istri." />
     <meta name="theme-color" content="#173f33" />
-    <meta name="app-version" content="12" />
+    <meta name="app-version" content="13" />
     <title>Keuangan Kita</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=12" />
+    <link rel="stylesheet" href="./styles.css?v=13" />
   </head>
   <body>
     <div id="configError" class="config-error hidden">
@@ -196,6 +196,13 @@
                 <button id="viewIncomeButton" class="button primary" type="button">＋ Income</button>
               </div>
             </div>
+            <section id="historyChart" class="history-chart" aria-labelledby="historyChartTitle">
+              <div class="history-chart-heading">
+                <div><span id="historyChartEyebrow">RINGKASAN OUTCOME</span><h3 id="historyChartTitle">Komposisi pengeluaran</h3></div>
+                <small id="historyChartScope">Semua pencatat</small>
+              </div>
+              <div id="historyChartContent"></div>
+            </section>
             <div id="transactionsTable" class="data-table"></div>
           </article>
         </section>
@@ -243,6 +250,15 @@
           <button id="saveTransactionButton" class="button primary full submit-button" type="submit">Simpan transaksi</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="transactionDetailDialog" class="modal transaction-detail-modal">
+      <div class="transaction-detail-content">
+        <button class="modal-close" type="button" aria-label="Tutup">×</button>
+        <header><span id="detailTransactionType" class="detail-type">OUTCOME</span><h2>Detail transaksi</h2><strong id="detailTransactionAmount" class="detail-amount">Rp0</strong></header>
+        <div id="transactionDetailBody" class="transaction-detail-body"></div>
+        <p class="detail-readonly-note">Detail ini hanya untuk dilihat. Gunakan tombol pensil pada Riwayat jika ingin mengubah transaksi.</p>
+      </div>
     </dialog>
 
     <dialog id="transferDialog" class="modal small-modal">
@@ -318,6 +334,6 @@
     </dialog>
 
     <div id="toastContainer" class="toast-container" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=12"></script>
+    <script type="module" src="./app.js?v=13"></script>
   </body>
 </html>
