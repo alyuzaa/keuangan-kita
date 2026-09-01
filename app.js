@@ -3,6 +3,8 @@ import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./config.js";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+const currentDate = new Date();
+const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
 
 const state = {
   user: null,
@@ -17,7 +19,7 @@ const state = {
   transactionMode: "income",
   transactionFilter: "all",
   transactionMemberFilter: "all",
-  transactionMonth: "all",
+  transactionMonth: currentMonthKey,
   editingTransactionId: null,
   editingAssetId: null,
   activeView: "dashboard",
@@ -91,6 +93,7 @@ async function handleSession(session) {
     state.transfers = [];
     state.adjustments = [];
     state.auditLogs = [];
+    state.transactionMonth = currentMonthKey;
     showScreen("auth");
     setBusy(false);
     return;
@@ -609,9 +612,9 @@ function renderDashboard() {
 function renderTransactionMonthOptions() {
   const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
   const transactionMonths = [...new Set(
-    state.transactions
+    [currentMonthKey, ...state.transactions
       .map((item) => String(item.date).slice(0, 7))
-      .filter((value) => /^\d{4}-\d{2}$/.test(value)),
+      .filter((value) => /^\d{4}-\d{2}$/.test(value))],
   )].sort((a, b) => b.localeCompare(a));
   const options = transactionMonths.map((value) => {
     const [year, month] = value.split("-").map(Number);
@@ -708,7 +711,6 @@ function renderHistoryChart() {
     : state.transactionMemberFilter === "member" ? "Istri" : "Semua pencatat";
 
   $("#historyChartEyebrow").textContent = isIncome ? "RINGKASAN INCOME" : "RINGKASAN OUTCOME";
-  $("#historyChartTitle").textContent = isIncome ? "Komposisi pemasukan" : "Komposisi pengeluaran";
   $("#historyChartScope").textContent = scopeLabel;
 
   if (!total) {
@@ -742,7 +744,8 @@ function renderHistoryChart() {
       <div class="history-chart-legend">
         ${categories.map((item) => {
           const percentage = item.value / total * 100;
-          return `<div class="chart-legend-row"><i style="background:${historyCategoryColor(item.name, chartType)}"></i><div><strong>${escapeHtml(item.name)}</strong><span>${formatPercentage(percentage)}</span></div><b>${formatRupiah(item.value)}</b></div>`;
+          const color = historyCategoryColor(item.name, chartType);
+          return `<div class="chart-legend-row" style="--chart-color:${color}"><i></i><div><strong>${escapeHtml(item.name)}</strong><span>${formatPercentage(percentage)}</span></div><b>${formatRupiah(item.value)}</b></div>`;
         }).join("")}
       </div>
     </div>`;

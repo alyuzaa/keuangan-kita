@@ -220,7 +220,6 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .history-chart { display: none; }
 .history-chart-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .history-chart-heading span, .history-chart-heading small { color: #849087; font-size: 8px; font-weight: 800; letter-spacing: .07em; }
-.history-chart-heading h3 { margin: 3px 0 0; font-family: Georgia, serif; font-size: 19px; }
 .history-chart-heading small { max-width: 100px; margin-top: 3px; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .history-chart-layout { display: grid; grid-template-columns: minmax(126px, 148px) minmax(0, 1fr); gap: 16px; align-items: center; }
 .history-donut-wrap { position: relative; width: 100%; aspect-ratio: 1; }
@@ -233,11 +232,11 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .history-donut-center strong { max-width: 100%; margin-top: 3px; overflow: hidden; color: #1c503f; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .history-chart-legend { min-width: 0; display: grid; gap: 8px; }
 .chart-legend-row { min-width: 0; display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 7px; }
-.chart-legend-row > i { width: 8px; height: 8px; border-radius: 50%; }
+.chart-legend-row > i { width: 8px; height: 8px; border-radius: 50%; background: var(--chart-color); }
 .chart-legend-row > div { min-width: 0; display: flex; align-items: baseline; gap: 5px; }
-.chart-legend-row strong { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.chart-legend-row span { flex: 0 0 auto; color: #858f89; font-size: 8px; }
-.chart-legend-row > b { color: #53645b; font-size: 8px; white-space: nowrap; }
+.chart-legend-row strong { overflow: hidden; color: var(--chart-color); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.chart-legend-row span { flex: 0 0 auto; color: var(--chart-color); font-size: 8px; }
+.chart-legend-row > b { color: var(--chart-color); font-size: 8px; white-space: nowrap; }
 .chart-empty { min-height: 116px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px; color: #849087; text-align: center; }
 .chart-empty div { color: #547565; font-size: 30px; }
 .chart-empty strong { margin-top: 3px; color: #38564a; font-size: 11px; }
