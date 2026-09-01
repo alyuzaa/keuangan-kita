@@ -10,6 +10,9 @@ const state = {
   householdMembers: [],
   transactions: [],
   assets: [],
+  transfers: [],
+  adjustments: [],
+  auditLogs: [],
   authMode: "login",
   transactionMode: "income",
   transactionFilter: "all",
@@ -23,6 +26,13 @@ const state = {
 
 const incomeCategories = ["Gaji", "Bonus", "Usaha", "Investasi", "Hadiah", "Lainnya"];
 const outcomeCategories = ["Rumah tangga", "Tagihan", "Transportasi", "Kesehatan", "Kecantikan", "Belanja", "Hiburan", "Lainnya"];
+const balanceOptions = [
+  { key: "husband", label: "Uang suami" },
+  { key: "wife", label: "Uang istri" },
+  { key: "savings", label: "Tabungan bersama" },
+  { key: "wife_savings", label: "Tabungan istri" },
+  { key: "education", label: "Pendidikan" },
+];
 const today = new Date().toISOString().slice(0, 10);
 
 const isConfigured =
@@ -77,6 +87,9 @@ async function handleSession(session) {
     state.householdMembers = [];
     state.transactions = [];
     state.assets = [];
+    state.transfers = [];
+    state.adjustments = [];
+    state.auditLogs = [];
     showScreen("auth");
     setBusy(false);
     return;
@@ -119,7 +132,7 @@ async function loadHousehold() {
 async function loadFinanceData() {
   setBusy(true);
   const householdId = state.household.id;
-  const [transactionsResult, assetsResult, membersResult] = await Promise.all([
+  const [transactionsResult, assetsResult, membersResult, transfersResult, adjustmentsResult, logsResult] = await Promise.all([
     supabase
       .from("transactions")
       .select("*")
@@ -135,14 +148,39 @@ async function loadFinanceData() {
       .from("household_members")
       .select("user_id, role, display_name")
       .eq("household_id", householdId),
+    supabase
+      .from("balance_transfers")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("balance_adjustments")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("audit_logs")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("created_at", { ascending: false }),
   ]);
 
-  if (transactionsResult.error || assetsResult.error || membersResult.error) {
-    showToast(transactionsResult.error?.message || assetsResult.error?.message || membersResult.error?.message || "Data gagal dimuat.", "error");
+  const loadError = transactionsResult.error
+    || assetsResult.error
+    || membersResult.error
+    || transfersResult.error
+    || adjustmentsResult.error
+    || logsResult.error;
+  if (loadError) {
+    showToast(loadError.message || "Data gagal dimuat.", "error");
   } else {
     state.transactions = transactionsResult.data ?? [];
     state.assets = assetsResult.data ?? [];
     state.householdMembers = membersResult.data ?? [];
+    state.transfers = transfersResult.data ?? [];
+    state.adjustments = adjustmentsResult.data ?? [];
+    state.auditLogs = logsResult.data ?? [];
     renderAll();
   }
   setBusy(false);
@@ -166,6 +204,8 @@ function bindEvents() {
 
   $("#topIncomeButton").addEventListener("click", () => openTransactionDialog("income"));
   $("#topOutcomeButton").addEventListener("click", () => openTransactionDialog("outcome"));
+  $("#topTransferButton").addEventListener("click", openTransferDialog);
+  $("#adjustBalanceButton").addEventListener("click", openAdjustmentDialog);
   $("#viewIncomeButton").addEventListener("click", () => openTransactionDialog("income"));
   $("#viewOutcomeButton").addEventListener("click", () => openTransactionDialog("outcome"));
   $("#addAssetButton").addEventListener("click", () => openAssetDialog());
@@ -173,10 +213,14 @@ function bindEvents() {
   $("#transactionDialog .modal-close").addEventListener("click", () => $("#transactionDialog").close());
   $("#assetDialog .modal-close").addEventListener("click", () => $("#assetDialog").close());
   $("#userNameDialog .modal-close").addEventListener("click", () => $("#userNameDialog").close());
+  $("#transferDialog .modal-close").addEventListener("click", () => $("#transferDialog").close());
+  $("#adjustmentDialog .modal-close").addEventListener("click", () => $("#adjustmentDialog").close());
   $("#transactionForm").addEventListener("submit", saveTransaction);
   $("#assetForm").addEventListener("submit", saveAsset);
   $("#passwordForm").addEventListener("submit", saveNewPassword);
   $("#userNameForm").addEventListener("submit", saveUserName);
+  $("#transferForm").addEventListener("submit", saveTransfer);
+  $("#adjustmentForm").addEventListener("submit", saveAdjustment);
   $$(".modal").forEach((dialog) => dialog.addEventListener("close", unlockPageScroll));
 
   $$(".filter-tabs button").forEach((button) => {
@@ -209,6 +253,8 @@ function bindEvents() {
     "#educationAllocation",
     "#assetPurchaseValue",
     "#assetCurrentValue",
+    "#transferAmount",
+    "#adjustmentNewBalance",
   ].forEach((selector) => {
     $(selector).addEventListener("input", (event) => {
       event.target.value = formatNumberInput(event.target.value);
@@ -219,6 +265,8 @@ function bindEvents() {
 
   $("#assetQuantity").addEventListener("input", updateAssetCalculation);
   $("#assetUnit").addEventListener("change", updateAssetCalculation);
+  $("#transferSource").addEventListener("change", updateTransferFields);
+  $("#adjustmentBalance").addEventListener("change", updateAdjustmentFields);
 
   $("#inviteCodeInput").addEventListener("input", (event) => {
     event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -412,6 +460,7 @@ function switchView(view) {
     dashboard: ["BERANDA KELUARGA", "Selamat datang kembali"],
     transactions: ["ARUS KEUANGAN", "Riwayat transaksi"],
     assets: ["KEKAYAAN KELUARGA", "Daftar aset"],
+    logs: ["JEJAK PERUBAHAN", "Logs aktivitas"],
   };
 
   $$(".view").forEach((item) => item.classList.add("hidden"));
@@ -426,6 +475,7 @@ function renderAll() {
   renderTransactionMonthOptions();
   renderTransactions();
   renderAssets();
+  renderLogs();
   switchView(state.activeView);
 }
 
@@ -461,6 +511,29 @@ function getTotals() {
       if (item.source === "education") education -= amount;
       if (item.date.startsWith(monthKey)) monthOutcome += amount;
     }
+  });
+
+  state.transfers.forEach((item) => {
+    const amount = Number(item.amount);
+    if (item.from_balance === "husband") husband -= amount;
+    if (item.from_balance === "wife") wife -= amount;
+    if (item.from_balance === "savings") savings -= amount;
+    if (item.from_balance === "wife_savings") wifeSavings -= amount;
+    if (item.from_balance === "education") education -= amount;
+    if (item.to_balance === "husband") husband += amount;
+    if (item.to_balance === "wife") wife += amount;
+    if (item.to_balance === "savings") savings += amount;
+    if (item.to_balance === "wife_savings") wifeSavings += amount;
+    if (item.to_balance === "education") education += amount;
+  });
+
+  state.adjustments.forEach((item) => {
+    const delta = Number(item.delta);
+    if (item.balance_key === "husband") husband += delta;
+    if (item.balance_key === "wife") wife += delta;
+    if (item.balance_key === "savings") savings += delta;
+    if (item.balance_key === "wife_savings") wifeSavings += delta;
+    if (item.balance_key === "education") education += delta;
   });
 
   const assetValue = state.assets.reduce((sum, item) => sum + Number(item.current_value), 0);
@@ -628,6 +701,72 @@ function renderAssets() {
   bindDynamicActions();
 }
 
+function renderLogs() {
+  const container = $("#logsList");
+  if (!state.auditLogs.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">≡</div>
+        <h4>Belum ada log</h4>
+        <p>Aktivitas baru akan tercatat setelah pembaruan database ini dipasang.</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = state.auditLogs.map((log) => {
+    const member = state.householdMembers.find((item) => String(item.user_id) === String(log.user_id));
+    const fallbackName = log.user_id === state.user?.id ? (state.user.email?.split("@")[0] || "Pengguna") : "Pengguna";
+    const actorName = member?.display_name || fallbackName;
+    const role = member?.role === "owner" ? "owner" : member?.role === "member" ? "member" : "unknown";
+    return `
+      <article class="log-row">
+        <div class="log-icon ${escapeHtml(log.action)}">${logIcon(log)}</div>
+        <div class="log-copy">
+          <strong>${escapeHtml(log.summary)}</strong>
+          <span>${logDetail(log)}</span>
+          <div><time datetime="${escapeHtml(log.created_at)}">${formatDateTime(log.created_at)}</time><small class="member-name ${role}">${escapeHtml(actorName)}</small></div>
+        </div>
+        <b class="log-action">${escapeHtml(logActionLabel(log.action))}</b>
+      </article>`;
+  }).join("");
+}
+
+function logDetail(log) {
+  const details = log.details || {};
+  const record = details.after || details.before || {};
+  if (log.entity_type === "transfer") {
+    return `${escapeHtml(sourceLabel(record.from_balance))} → ${escapeHtml(sourceLabel(record.to_balance))} · ${formatRupiah(record.amount)}`;
+  }
+  if (log.entity_type === "adjustment") {
+    return `${escapeHtml(sourceLabel(record.balance_key))}: ${formatRupiah(record.previous_balance)} → ${formatRupiah(record.new_balance)}${record.notes ? ` · ${escapeHtml(record.notes)}` : ""}`;
+  }
+  if (log.entity_type === "transaction") {
+    return `${escapeHtml(record.category || "Transaksi")} · ${formatRupiah(record.amount)}`;
+  }
+  if (log.entity_type === "asset") {
+    return `${escapeHtml(record.name || "Aset")} · ${formatRupiah(record.current_value)}`;
+  }
+  return "Perubahan data keluarga";
+}
+
+function logIcon(log) {
+  if (log.entity_type === "transfer") return "⇄";
+  if (log.entity_type === "adjustment") return "±";
+  if (log.entity_type === "asset") return "◇";
+  if (log.action === "delete") return "×";
+  if (log.action === "update") return "✎";
+  return "+";
+}
+
+function logActionLabel(action) {
+  if (action === "create") return "Ditambah";
+  if (action === "update") return "Diubah";
+  if (action === "delete") return "Dihapus";
+  if (action === "transfer") return "Transfer";
+  if (action === "adjustment") return "Penyesuaian";
+  return "Aktivitas";
+}
+
 function transactionRowHtml(item) {
   return `
     <div class="recent-row">
@@ -770,6 +909,13 @@ async function saveTransaction(event) {
   };
   if (!isEditing) payload.user_id = state.user.id;
 
+  const insufficientBalance = projectedNegativeBalance(payload, isEditing ? state.editingTransactionId : null);
+  if (insufficientBalance) {
+    showToast(`Saldo ${sourceLabel(insufficientBalance)} tidak mencukupi.`, "error");
+    setButtonBusy(button, false);
+    return;
+  }
+
   const query = supabase.from("transactions");
   const { error } = isEditing
     ? await query
@@ -802,6 +948,116 @@ function updateAllocationStatus() {
   status.textContent = remaining === 0 ? "Pas" : `Sisa ${formatRupiah(remaining)}`;
   status.classList.toggle("balanced", remaining === 0);
   $("#saveTransactionButton").disabled = state.transactionMode === "income" && remaining !== 0;
+}
+
+function openTransferDialog() {
+  $("#transferForm").reset();
+  $("#transferDate").value = today;
+  $("#transferSource").innerHTML = balanceOptionsHtml();
+  $("#transferSource").value = "husband";
+  updateTransferFields();
+  openModal($("#transferDialog"));
+}
+
+function updateTransferFields() {
+  const source = $("#transferSource").value || "husband";
+  const previousDestination = $("#transferDestination").value;
+  $("#transferDestination").innerHTML = balanceOptionsHtml(source);
+  if (previousDestination && previousDestination !== source) {
+    $("#transferDestination").value = previousDestination;
+  }
+  $("#transferAvailable").textContent = formatRupiah(balanceValue(getTotals(), source));
+}
+
+async function saveTransfer(event) {
+  event.preventDefault();
+  const source = $("#transferSource").value;
+  const destination = $("#transferDestination").value;
+  const amount = parseNumber($("#transferAmount").value);
+  const available = balanceValue(getTotals(), source);
+
+  if (!source || !destination || source === destination) {
+    showToast("Pilih dua pos saldo yang berbeda.", "error");
+    return;
+  }
+  if (amount <= 0) {
+    showToast("Nominal transfer harus lebih dari nol.", "error");
+    return;
+  }
+  if (amount > available) {
+    showToast(`Saldo ${sourceLabel(source)} tidak mencukupi.`, "error");
+    return;
+  }
+
+  const button = $("#saveTransferButton");
+  setButtonBusy(button, true, "Mentransfer…");
+  const { error } = await supabase.rpc("create_balance_transfer", {
+    p_from_balance: source,
+    p_to_balance: destination,
+    p_amount: amount,
+    p_date: $("#transferDate").value,
+    p_notes: $("#transferNotes").value.trim(),
+  });
+  if (error) {
+    showToast(error.message, "error");
+  } else {
+    $("#transferDialog").close();
+    showToast("Transfer saldo berhasil.");
+    await loadFinanceData();
+  }
+  setButtonBusy(button, false);
+}
+
+function openAdjustmentDialog() {
+  $("#adjustmentForm").reset();
+  $("#adjustmentBalance").innerHTML = balanceOptionsHtml();
+  $("#adjustmentBalance").value = "husband";
+  updateAdjustmentFields();
+  openModal($("#adjustmentDialog"));
+}
+
+function updateAdjustmentFields() {
+  const balanceKey = $("#adjustmentBalance").value || "husband";
+  const current = balanceValue(getTotals(), balanceKey);
+  $("#adjustmentCurrent").textContent = formatRupiah(current);
+  $("#adjustmentNewBalance").value = new Intl.NumberFormat("id-ID").format(current);
+}
+
+async function saveAdjustment(event) {
+  event.preventDefault();
+  const balanceKey = $("#adjustmentBalance").value;
+  const newBalance = parseNumber($("#adjustmentNewBalance").value);
+  const currentBalance = balanceValue(getTotals(), balanceKey);
+  const notes = $("#adjustmentNotes").value.trim();
+
+  if (newBalance < 0) {
+    showToast("Saldo baru tidak boleh minus.", "error");
+    return;
+  }
+  if (newBalance === currentBalance) {
+    showToast("Saldo baru masih sama dengan saldo saat ini.", "error");
+    return;
+  }
+  if (notes.length < 3) {
+    showToast("Tuliskan alasan penyesuaian saldo.", "error");
+    return;
+  }
+
+  const button = $("#saveAdjustmentButton");
+  setButtonBusy(button, true, "Menyimpan…");
+  const { error } = await supabase.rpc("adjust_household_balance", {
+    p_balance_key: balanceKey,
+    p_new_balance: newBalance,
+    p_notes: notes,
+  });
+  if (error) {
+    showToast(error.message, "error");
+  } else {
+    $("#adjustmentDialog").close();
+    showToast("Penyesuaian saldo berhasil disimpan.");
+    await loadFinanceData();
+  }
+  setButtonBusy(button, false);
 }
 
 function editAsset(id) {
@@ -916,6 +1172,16 @@ async function saveAsset(event) {
 
 async function deleteTransaction(id) {
   if (!confirm("Hapus transaksi ini? Saldo akan dihitung ulang.")) return;
+  const transaction = state.transactions.find((item) => String(item.id) === String(id));
+  if (transaction) {
+    const balances = currentBalanceMap();
+    applyTransactionEffect(balances, transaction, -1);
+    const negativeKey = balanceOptions.find((item) => balances[item.key] < 0)?.key;
+    if (negativeKey) {
+      showToast(`Transaksi tidak dapat dihapus karena saldo ${sourceLabel(negativeKey)} akan menjadi minus.`, "error");
+      return;
+    }
+  }
   const { error } = await supabase
     .from("transactions")
     .delete()
@@ -998,6 +1264,16 @@ function formatDate(date, includeYear = false) {
   });
 }
 
+function formatDateTime(value) {
+  return new Date(value).toLocaleString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function formatQuantity(value) {
   return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(Number(value));
 }
@@ -1008,6 +1284,49 @@ function sourceLabel(source) {
   if (source === "wife_savings") return "Tabungan istri";
   if (source === "education") return "Pendidikan";
   return "Tabungan bersama";
+}
+
+function balanceOptionsHtml(excludedKey = null) {
+  return balanceOptions
+    .filter((item) => item.key !== excludedKey)
+    .map((item) => `<option value="${item.key}">${item.label}</option>`)
+    .join("");
+}
+
+function balanceValue(totals, key) {
+  if (key === "husband") return Number(totals.husband);
+  if (key === "wife") return Number(totals.wife);
+  if (key === "savings") return Number(totals.savings);
+  if (key === "wife_savings") return Number(totals.wifeSavings);
+  if (key === "education") return Number(totals.education);
+  return 0;
+}
+
+function currentBalanceMap() {
+  const totals = getTotals();
+  return Object.fromEntries(balanceOptions.map((item) => [item.key, balanceValue(totals, item.key)]));
+}
+
+function applyTransactionEffect(balances, transaction, multiplier = 1) {
+  if (transaction.type === "income") {
+    balances.husband += multiplier * Number(transaction.husband_allocation || 0);
+    balances.wife += multiplier * Number(transaction.wife_allocation || 0);
+    balances.savings += multiplier * Number(transaction.savings_allocation || 0);
+    balances.wife_savings += multiplier * Number(transaction.wife_savings_allocation || 0);
+    balances.education += multiplier * Number(transaction.education_allocation || 0);
+  } else if (transaction.source && Object.hasOwn(balances, transaction.source)) {
+    balances[transaction.source] -= multiplier * Number(transaction.amount || 0);
+  }
+}
+
+function projectedNegativeBalance(payload, editingId = null) {
+  const balances = currentBalanceMap();
+  if (editingId) {
+    const previous = state.transactions.find((item) => String(item.id) === String(editingId));
+    if (previous) applyTransactionEffect(balances, previous, -1);
+  }
+  applyTransactionEffect(balances, payload, 1);
+  return balanceOptions.find((item) => balances[item.key] < 0)?.key || null;
 }
 
 function assetSymbol(type) {

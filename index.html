@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Pencatatan keuangan pribadi untuk suami dan istri." />
     <meta name="theme-color" content="#173f33" />
-    <meta name="app-version" content="11" />
+    <meta name="app-version" content="12" />
     <title>Keuangan Kita</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=11" />
+    <link rel="stylesheet" href="./styles.css?v=12" />
   </head>
   <body>
     <div id="configError" class="config-error hidden">
@@ -92,6 +92,7 @@
           <button class="nav-button active" data-view="dashboard" type="button"><span>⌂</span>Beranda</button>
           <button class="nav-button" data-view="transactions" type="button"><span>⇄</span>Riwayat</button>
           <button class="nav-button" data-view="assets" type="button"><span>◇</span>Aset</button>
+          <button class="nav-button" data-view="logs" type="button"><span>≡</span>Logs</button>
         </nav>
 
         <section class="invite-panel">
@@ -119,6 +120,7 @@
             <h1 id="pageTitle">Selamat datang kembali</h1>
           </div>
           <div class="top-actions">
+            <button id="topTransferButton" class="button transfer-button" type="button"><span>⇄</span><b>Transfer</b></button>
             <button id="topOutcomeButton" class="button secondary" type="button"><span>↗</span><b>Outcome</b></button>
             <button id="topIncomeButton" class="button primary" type="button"><span>＋</span><b>Income</b></button>
           </div>
@@ -133,6 +135,7 @@
             <article class="wealth-card">
               <div class="wealth-heading">
                 <div><span>Total kekayaan keluarga</span><h2 id="totalWealth">Rp0</h2></div>
+                <button id="adjustBalanceButton" class="wealth-adjust-button" type="button" aria-label="Penyesuaian saldo"><span>±</span><b class="adjust-label-full">Penyesuaian saldo</b><b class="adjust-label-short">Sesuaikan</b></button>
               </div>
               <div class="wealth-breakdown">
                 <div><span>Tabungan bersama</span><strong id="savingsBalance">Rp0</strong></div>
@@ -204,6 +207,16 @@
           <div class="assets-heading"><div><p>PORTOFOLIO KELUARGA</p><h2>Semua aset</h2></div><button id="addAssetButton" class="button primary" type="button">＋ Tambah aset</button></div>
           <div id="assetsGrid" class="assets-grid"></div>
         </section>
+
+        <section id="logsView" class="view hidden">
+          <article class="content-panel panel logs-panel">
+            <div class="logs-heading">
+              <div><p>JEJAK PERUBAHAN</p><h2>Logs aktivitas</h2></div>
+              <span>Catatan tidak dapat diedit atau dihapus.</span>
+            </div>
+            <div id="logsList" class="logs-list"></div>
+          </article>
+        </section>
       </main>
     </div>
 
@@ -228,6 +241,36 @@
 
           <label id="outcomeSourceGroup" class="full hidden"><span>Sumber dana</span><select id="outcomeSource"><option value="husband">Uang suami</option><option value="wife">Uang istri</option><option value="savings">Tabungan bersama</option><option value="wife_savings">Tabungan istri</option><option value="education">Pendidikan</option></select></label>
           <button id="saveTransactionButton" class="button primary full submit-button" type="submit">Simpan transaksi</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="transferDialog" class="modal small-modal">
+      <form id="transferForm" method="dialog">
+        <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
+        <header><h2>Transfer saldo</h2><p>Pindahkan uang antar-pos tanpa mencatatnya sebagai income atau outcome.</p></header>
+        <div class="form-grid">
+          <label><span>Dari saldo</span><select id="transferSource" required></select></label>
+          <label><span>Ke saldo</span><select id="transferDestination" required></select></label>
+          <div class="balance-hint full"><span>Saldo tersedia</span><strong id="transferAvailable">Rp0</strong></div>
+          <label class="full"><span>Nominal</span><div class="money-field"><b>Rp</b><input id="transferAmount" inputmode="numeric" placeholder="0" required /></div></label>
+          <label class="full"><span>Tanggal</span><input id="transferDate" type="date" required /></label>
+          <label class="full"><span>Catatan <small>opsional</small></span><input id="transferNotes" type="text" maxlength="120" placeholder="Contoh: Pindah ke tabungan bersama" /></label>
+          <button id="saveTransferButton" class="button primary full submit-button" type="submit">Transfer saldo</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="adjustmentDialog" class="modal small-modal">
+      <form id="adjustmentForm" method="dialog">
+        <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
+        <header><h2>Penyesuaian saldo</h2><p>Samakan catatan aplikasi dengan saldo sebenarnya. Perubahan akan tersimpan di Logs.</p></header>
+        <div class="form-grid">
+          <label class="full"><span>Saldo yang disesuaikan</span><select id="adjustmentBalance" required></select></label>
+          <div class="balance-hint full"><span>Saldo saat ini</span><strong id="adjustmentCurrent">Rp0</strong></div>
+          <label class="full"><span>Saldo baru</span><div class="money-field"><b>Rp</b><input id="adjustmentNewBalance" inputmode="numeric" placeholder="0" required /></div></label>
+          <label class="full"><span>Alasan penyesuaian</span><input id="adjustmentNotes" type="text" minlength="3" maxlength="120" placeholder="Contoh: Koreksi saldo rekening" required /></label>
+          <button id="saveAdjustmentButton" class="button primary full submit-button" type="submit">Simpan penyesuaian</button>
         </div>
       </form>
     </dialog>
@@ -275,6 +318,6 @@
     </dialog>
 
     <div id="toastContainer" class="toast-container" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=11"></script>
+    <script type="module" src="./app.js?v=12"></script>
   </body>
 </html>
