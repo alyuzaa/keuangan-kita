@@ -5,5 +5,5 @@
 // Keamanan data dijaga oleh Row Level Security (RLS) dalam supabase-schema.sql.
 // JANGAN pernah memasukkan secret key atau service_role key di file ini.
 
-export const SUPABASE_URL = "https://GANTI-DENGAN-PROJECT-ID.supabase.co";
-export const SUPABASE_PUBLISHABLE_KEY = "GANTI_DENGAN_PUBLISHABLE_ATAU_ANON_KEY";
+export const SUPABASE_URL = "https://euklymadufsrgdsrcmiy.supabase.co";
+export const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_qUYwUt1TR1AUBgLuae6QnA_F8ThKmad";
