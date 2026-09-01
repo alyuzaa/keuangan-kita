@@ -218,6 +218,7 @@ function bindEvents() {
   $("#assetDialog .modal-close").addEventListener("click", () => $("#assetDialog").close());
   $("#userNameDialog .modal-close").addEventListener("click", () => $("#userNameDialog").close());
   $("#transactionDetailDialog .modal-close").addEventListener("click", () => $("#transactionDetailDialog").close());
+  $("#transactionDetailDialog").addEventListener("click", closeTransactionDetailFromBackdrop);
   $("#transferDialog .modal-close").addEventListener("click", () => $("#transferDialog").close());
   $("#adjustmentDialog .modal-close").addEventListener("click", () => $("#adjustmentDialog").close());
   $("#transactionForm").addEventListener("submit", saveTransaction);
@@ -744,8 +745,8 @@ function renderHistoryChart() {
       <div class="history-chart-legend">
         ${categories.map((item) => {
           const percentage = item.value / total * 100;
-          const color = historyCategoryColor(item.name, chartType);
-          return `<div class="chart-legend-row" style="--chart-color:${color}"><i></i><div><strong>${escapeHtml(item.name)}</strong><span>${formatPercentage(percentage)}</span></div><b>${formatRupiah(item.value)}</b></div>`;
+          const colorClass = `chart-color-${historyCategoryColorIndex(item.name, chartType)}`;
+          return `<div class="chart-legend-row ${colorClass}"><i></i><div><strong>${escapeHtml(item.name)}</strong><span>${formatPercentage(percentage)}</span></div><b>${formatRupiah(item.value)}</b></div>`;
         }).join("")}
       </div>
     </div>`;
@@ -923,6 +924,18 @@ function openTransactionDetail(id) {
 
   $("#transactionDetailBody").innerHTML = basicDetails + financeDetails;
   openModal($("#transactionDetailDialog"));
+}
+
+function closeTransactionDetailFromBackdrop(event) {
+  const dialog = $("#transactionDetailDialog");
+  const content = dialog.querySelector(".transaction-detail-content");
+  const bounds = content.getBoundingClientRect();
+  const tappedOutside = event.clientX < bounds.left
+    || event.clientX > bounds.right
+    || event.clientY < bounds.top
+    || event.clientY > bounds.bottom;
+
+  if (tappedOutside) dialog.close();
 }
 
 function emptyStateHtml(icon, title, copy, action) {
@@ -1399,11 +1412,15 @@ function formatPercentage(value) {
 }
 
 function historyCategoryColor(category, type) {
+  return chartColors[historyCategoryColorIndex(category, type)];
+}
+
+function historyCategoryColorIndex(category, type) {
   const categories = type === "income" ? incomeCategories : outcomeCategories;
   const index = categories.indexOf(category);
-  if (index >= 0) return chartColors[index % chartColors.length];
+  if (index >= 0) return index % chartColors.length;
   const hash = [...String(category)].reduce((total, character) => total + character.charCodeAt(0), 0);
-  return chartColors[hash % chartColors.length];
+  return hash % chartColors.length;
 }
 
 function formatQuantity(value) {

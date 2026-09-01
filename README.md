@@ -16,7 +16,7 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 - Pencatatan emas, tanah, perhiasan, kendaraan, properti, dan aset lainnya.
 - Dashboard total kekayaan, saldo tersedia, nilai aset, dan arus bulan berjalan.
 - Riwayat otomatis membuka bulan berjalan dan dapat difilter berdasarkan jenis, bulan, serta pencatat (suami/istri).
-- Baris riwayat dapat diketuk untuk melihat detail tanpa masuk ke mode edit.
+- Baris riwayat dapat diketuk untuk melihat detail tanpa masuk ke mode edit; ketuk area di luar kotak untuk menutup detail.
 - Donut chart kategori pada mobile mengikuti filter Riwayat yang aktif, dengan warna teks legenda yang sama seperti segmen chart.
 - Edit/hapus transaksi dan aset, serta tab Logs yang tidak dapat diubah.
 - Row Level Security (RLS): pengguna tidak bisa membaca household lain.
