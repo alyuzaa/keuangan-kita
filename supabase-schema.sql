@@ -17,10 +17,31 @@ create table if not exists public.household_members (
   household_id uuid not null references public.households(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   role text not null default 'member' check (role in ('owner', 'member')),
+  email text not null check (char_length(email) between 3 and 320),
   joined_at timestamptz not null default now(),
   primary key (household_id, user_id),
   unique (user_id)
 );
+
+-- Menjaga schema tetap dapat diperbarui jika tabel dibuat oleh versi lama.
+alter table public.household_members
+  add column if not exists email text;
+
+update public.household_members as member
+set email = lower(auth_user.email)
+from auth.users as auth_user
+where auth_user.id = member.user_id
+  and member.email is null;
+
+alter table public.household_members
+  drop constraint if exists household_members_email_check;
+
+alter table public.household_members
+  add constraint household_members_email_check
+  check (char_length(email) between 3 and 320);
+
+alter table public.household_members
+  alter column email set not null;
 
 create table if not exists public.transactions (
   id uuid primary key default gen_random_uuid(),
@@ -77,6 +98,33 @@ create index if not exists transactions_household_date_idx
   on public.transactions(household_id, date desc);
 create index if not exists assets_household_idx
   on public.assets(household_id);
+
+-- Email disalin dari akun Auth agar hanya pasangan dalam household yang dapat
+-- melihat identitas pencatat melalui policy household_members.
+create or replace function public.set_household_member_email()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  select lower(auth_user.email)
+  into new.email
+  from auth.users as auth_user
+  where auth_user.id = new.user_id;
+
+  if new.email is null then
+    raise exception 'User email not found';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists set_household_member_email_trigger on public.household_members;
+create trigger set_household_member_email_trigger
+before insert or update of user_id on public.household_members
+for each row execute function public.set_household_member_email();
 
 -- Helper ini mencegah policy household_members menjadi rekursif.
 create or replace function public.is_household_member(target_household_id uuid)
@@ -283,6 +331,7 @@ grant select, insert, update, delete on public.transactions to authenticated;
 grant select, insert, update, delete on public.assets to authenticated;
 
 revoke execute on function public.is_household_member(uuid) from public, anon;
+revoke execute on function public.set_household_member_email() from public, anon, authenticated;
 revoke execute on function public.create_household(text) from public, anon;
 revoke execute on function public.join_household(text) from public, anon;
 

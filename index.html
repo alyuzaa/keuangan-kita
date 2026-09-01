@@ -167,10 +167,18 @@
           <article class="content-panel panel">
             <div class="view-toolbar">
               <div class="history-filters">
-                <div class="filter-tabs">
-                  <button class="active" data-filter="all" type="button">Semua</button>
-                  <button data-filter="income" type="button">Income</button>
-                  <button data-filter="outcome" type="button">Outcome</button>
+                <div class="history-filter-stack">
+                  <div class="filter-tabs">
+                    <button class="active" data-filter="all" type="button">Semua</button>
+                    <button data-filter="income" type="button">Income</button>
+                    <button data-filter="outcome" type="button">Outcome</button>
+                  </div>
+                  <div class="member-filter-tabs" aria-label="Filter pencatat transaksi">
+                    <span>Pencatat</span>
+                    <button class="active" data-member-filter="all" type="button">Semua</button>
+                    <button data-member-filter="owner" type="button">Suami</button>
+                    <button data-member-filter="member" type="button">Istri</button>
+                  </div>
                 </div>
                 <select id="transactionMonthFilter" class="month-filter" aria-label="Pilih bulan riwayat">
                   <option value="all">Semua bulan</option>

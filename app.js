@@ -7,11 +7,13 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 const state = {
   user: null,
   household: null,
+  householdMembers: [],
   transactions: [],
   assets: [],
   authMode: "login",
   transactionMode: "income",
   transactionFilter: "all",
+  transactionMemberFilter: "all",
   transactionMonth: "all",
   editingTransactionId: null,
   editingAssetId: null,
@@ -72,6 +74,7 @@ async function handleSession(session) {
 
   if (!state.user) {
     state.household = null;
+    state.householdMembers = [];
     state.transactions = [];
     state.assets = [];
     showScreen("auth");
@@ -115,7 +118,7 @@ async function loadHousehold() {
 async function loadFinanceData() {
   setBusy(true);
   const householdId = state.household.id;
-  const [transactionsResult, assetsResult] = await Promise.all([
+  const [transactionsResult, assetsResult, membersResult] = await Promise.all([
     supabase
       .from("transactions")
       .select("*")
@@ -127,13 +130,18 @@ async function loadFinanceData() {
       .select("*")
       .eq("household_id", householdId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("household_members")
+      .select("user_id, role, email")
+      .eq("household_id", householdId),
   ]);
 
-  if (transactionsResult.error || assetsResult.error) {
-    showToast(transactionsResult.error?.message || assetsResult.error?.message || "Data gagal dimuat.", "error");
+  if (transactionsResult.error || assetsResult.error || membersResult.error) {
+    showToast(transactionsResult.error?.message || assetsResult.error?.message || membersResult.error?.message || "Data gagal dimuat.", "error");
   } else {
     state.transactions = transactionsResult.data ?? [];
     state.assets = assetsResult.data ?? [];
+    state.householdMembers = membersResult.data ?? [];
     renderAll();
   }
   setBusy(false);
@@ -171,6 +179,14 @@ function bindEvents() {
     button.addEventListener("click", () => {
       state.transactionFilter = button.dataset.filter;
       $$(".filter-tabs button").forEach((item) => item.classList.toggle("active", item === button));
+      renderTransactions();
+    });
+  });
+
+  $$(".member-filter-tabs button").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.transactionMemberFilter = button.dataset.memberFilter;
+      $$(".member-filter-tabs button").forEach((item) => item.classList.toggle("active", item === button));
       renderTransactions();
     });
   });
@@ -495,7 +511,9 @@ function renderTransactions() {
   const filtered = state.transactions.filter((item) => {
     const matchesType = state.transactionFilter === "all" || item.type === state.transactionFilter;
     const matchesMonth = state.transactionMonth === "all" || item.date.startsWith(state.transactionMonth);
-    return matchesType && matchesMonth;
+    const member = transactionMember(item);
+    const matchesMember = state.transactionMemberFilter === "all" || member?.role === state.transactionMemberFilter;
+    return matchesType && matchesMonth && matchesMember;
   });
   const container = $("#transactionsTable");
 
@@ -512,14 +530,13 @@ function renderTransactions() {
   }
 
   container.innerHTML = `
-    <div class="table-head"><span>TRANSAKSI</span><span>TANGGAL</span><span>SUMBER/ALOKASI</span><span>NOMINAL</span><span></span></div>
+    <div class="table-head"><span>TRANSAKSI</span><span>SUMBER/ALOKASI</span><span>NOMINAL</span><span></span></div>
     ${filtered.map((item) => `
       <div class="table-row">
         <div class="transaction-name">
           <div class="transaction-icon ${item.type}">${item.type === "income" ? "↙" : "↗"}</div>
-          <div><strong>${escapeHtml(item.category)}</strong><span>${escapeHtml(item.description || (item.type === "income" ? "Pemasukan keluarga" : "Pengeluaran keluarga"))}</span></div>
+          ${transactionDetailsHtml(item)}
         </div>
-        <span>${formatDate(item.date, true)}</span>
         <span>${item.type === "income" ? "Suami · Istri · Tabungan bersama · Tabungan istri · Pendidikan" : sourceLabel(item.source)}</span>
         <strong class="${item.type === "income" ? "positive" : "negative"}">${item.type === "income" ? "+" : "−"}${formatRupiah(item.amount)}</strong>
         <div class="row-actions">
@@ -577,8 +594,29 @@ function transactionRowHtml(item) {
   return `
     <div class="recent-row">
       <div class="transaction-icon ${item.type}">${item.type === "income" ? "↙" : "↗"}</div>
-      <div><strong>${escapeHtml(item.category)}</strong><span>${formatDate(item.date)} · ${item.type === "income" ? "Income keluarga" : sourceLabel(item.source)}</span></div>
+      ${transactionDetailsHtml(item)}
       <b class="${item.type === "income" ? "positive" : "negative"}">${item.type === "income" ? "+" : "−"}${formatRupiah(item.amount)}</b>
+    </div>
+  `;
+}
+
+function transactionMember(item) {
+  return state.householdMembers.find((member) => String(member.user_id) === String(item.user_id)) ?? null;
+}
+
+function transactionDetailsHtml(item) {
+  const member = transactionMember(item);
+  const role = member?.role === "owner" ? "owner" : member?.role === "member" ? "member" : "unknown";
+  const roleLabel = role === "owner" ? "Suami" : role === "member" ? "Istri" : "Anggota";
+  const email = member?.email || (item.user_id === state.user?.id ? state.user.email : "Email tidak tersedia");
+  const description = item.description || (item.type === "income" ? "Pemasukan keluarga" : "Pengeluaran keluarga");
+
+  return `
+    <div class="transaction-details">
+      <strong>${escapeHtml(item.category)}</strong>
+      <span class="transaction-description">${escapeHtml(description)}</span>
+      <time datetime="${escapeHtml(item.date)}">${formatDate(item.date, true)}</time>
+      <small class="member-email ${role}" title="Dicatat oleh ${roleLabel}">${escapeHtml(email)}</small>
     </div>
   `;
 }
@@ -676,9 +714,9 @@ async function saveTransaction(event) {
 
   const button = $("#saveTransactionButton");
   setButtonBusy(button, true, "Menyimpan…");
+  const isEditing = state.editingTransactionId !== null;
   const payload = {
     household_id: state.household.id,
-    user_id: state.user.id,
     type: state.transactionMode,
     amount,
     date: $("#transactionDate").value,
@@ -691,8 +729,8 @@ async function saveTransaction(event) {
     wife_savings_allocation: state.transactionMode === "income" ? wifeSavings : 0,
     education_allocation: state.transactionMode === "income" ? education : 0,
   };
+  if (!isEditing) payload.user_id = state.user.id;
 
-  const isEditing = state.editingTransactionId !== null;
   const query = supabase.from("transactions");
   const { error } = isEditing
     ? await query
