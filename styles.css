@@ -310,6 +310,17 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .detail-readonly-note { margin: 16px 0 0; padding-top: 13px; border-top: 1px dashed #d8dad3; color: #89928c; font-size: 8px; line-height: 1.5; }
 .balance-hint { display: flex; align-items: center; justify-content: space-between; padding: 11px 13px; border-radius: 11px; color: #627168; background: #eef2eb; font-size: 9px; }
 .balance-hint strong { color: #1f604b; font-size: 11px; }
+.adjustment-entry { display: grid; grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr); gap: 8px; align-items: end; }
+.adjustment-entry > label { min-width: 0; }
+.adjustment-entry .money-field { height: 50px; gap: 5px; padding: 0 9px; }
+.adjustment-entry .money-field > b { font-size: 10px; }
+.adjustment-entry .money-field input { min-width: 0; height: 46px; font-size: 16px; }
+.adjustment-operator { height: 50px; display: grid; grid-template-rows: 1fr 1fr; gap: 4px; }
+.adjustment-operator button { width: 36px; min-height: 0; padding: 0; border: 1px solid #d9ddd5; border-radius: 8px; color: #76837b; background: #f3f3ed; font-size: 15px; font-weight: 850; line-height: 1; }
+.adjustment-operator button:first-child.active { color: white; border-color: #277565; background: #277565; }
+.adjustment-operator button:last-child.active { color: white; border-color: #b8554b; background: #b8554b; }
+.adjustment-equation { grid-column: 1 / -1; min-height: 14px; color: #718078; font-size: 8px; line-height: 1.4; text-align: center; }
+.adjustment-entry.has-error .adjustment-equation { color: var(--red); font-weight: 750; }
 .modal-close { position: absolute; top: 17px; right: 17px; width: 32px; height: 32px; border: 0; border-radius: 9px; color: #7c8680; background: #f0efe9; font-size: 19px; }
 .modal header h2 { margin: 0; font-family: Georgia, serif; font-size: 25px; }
 .modal header p { margin: 6px 38px 21px 0; color: var(--muted); font-size: 11px; line-height: 1.5; }

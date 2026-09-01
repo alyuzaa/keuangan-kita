@@ -20,6 +20,7 @@ const state = {
   transactionFilter: "all",
   transactionMemberFilter: "all",
   transactionMonth: currentMonthKey,
+  adjustmentOperator: "add",
   editingTransactionId: null,
   editingAssetId: null,
   activeView: "dashboard",
@@ -264,9 +265,13 @@ function bindEvents() {
     "#assetCurrentValue",
     "#transferAmount",
     "#adjustmentNewBalance",
+    "#adjustmentDelta",
   ].forEach((selector) => {
     $(selector).addEventListener("input", (event) => {
-      event.target.value = formatNumberInput(event.target.value);
+      const keepZero = selector === "#adjustmentNewBalance" || selector === "#adjustmentDelta";
+      event.target.value = keepZero
+        ? formatNumberInputIncludingZero(event.target.value)
+        : formatNumberInput(event.target.value);
       if (selector.includes("Allocation") || selector === "#transactionAmount") updateAllocationStatus();
       if (selector.startsWith("#asset")) updateAssetCalculation();
     });
@@ -276,6 +281,11 @@ function bindEvents() {
   $("#assetUnit").addEventListener("change", updateAssetCalculation);
   $("#transferSource").addEventListener("change", updateTransferFields);
   $("#adjustmentBalance").addEventListener("change", updateAdjustmentFields);
+  $("#adjustmentNewBalance").addEventListener("input", syncAdjustmentFromNewBalance);
+  $("#adjustmentDelta").addEventListener("input", syncAdjustmentFromDelta);
+  $$('[data-adjustment-operator]').forEach((button) => {
+    button.addEventListener("click", () => setAdjustmentOperator(button.dataset.adjustmentOperator));
+  });
 
   $("#inviteCodeInput").addEventListener("input", (event) => {
     event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -1157,7 +1167,55 @@ function updateAdjustmentFields() {
   const balanceKey = $("#adjustmentBalance").value || "husband";
   const current = balanceValue(getTotals(), balanceKey);
   $("#adjustmentCurrent").textContent = formatRupiah(current);
-  $("#adjustmentNewBalance").value = new Intl.NumberFormat("id-ID").format(current);
+  $("#adjustmentNewBalance").value = formatNumberInputIncludingZero(current);
+  $("#adjustmentDelta").value = "0";
+  setAdjustmentOperator("add", false);
+  updateAdjustmentEquation(current, 0, current);
+}
+
+function setAdjustmentOperator(operator, synchronize = true) {
+  state.adjustmentOperator = operator === "subtract" ? "subtract" : "add";
+  $$('[data-adjustment-operator]').forEach((button) => {
+    const active = button.dataset.adjustmentOperator === state.adjustmentOperator;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  if (synchronize) syncAdjustmentFromDelta();
+}
+
+function syncAdjustmentFromDelta() {
+  const balanceKey = $("#adjustmentBalance").value || "husband";
+  const current = balanceValue(getTotals(), balanceKey);
+  const delta = parseNumber($("#adjustmentDelta").value);
+  const result = state.adjustmentOperator === "subtract" ? current - delta : current + delta;
+  const invalid = result < 0;
+
+  $("#adjustmentNewBalance").value = formatNumberInputIncludingZero(Math.max(result, 0));
+  $("#adjustmentEntry").classList.toggle("has-error", invalid);
+  updateAdjustmentEquation(current, delta, result, invalid);
+}
+
+function syncAdjustmentFromNewBalance() {
+  const balanceKey = $("#adjustmentBalance").value || "husband";
+  const current = balanceValue(getTotals(), balanceKey);
+  const result = parseNumber($("#adjustmentNewBalance").value);
+  const operator = result < current ? "subtract" : "add";
+  const delta = Math.abs(result - current);
+
+  setAdjustmentOperator(operator, false);
+  $("#adjustmentDelta").value = formatNumberInputIncludingZero(delta);
+  $("#adjustmentEntry").classList.remove("has-error");
+  updateAdjustmentEquation(current, delta, result);
+}
+
+function updateAdjustmentEquation(current, delta, result, invalid = false) {
+  const equation = $("#adjustmentEquation");
+  if (invalid) {
+    equation.textContent = "Pengurangan melebihi saldo saat ini.";
+    return;
+  }
+  const symbol = state.adjustmentOperator === "subtract" ? "−" : "+";
+  equation.textContent = `${formatRupiah(current)} ${symbol} ${formatRupiah(delta)} = ${formatRupiah(result)}`;
 }
 
 async function saveAdjustment(event) {
@@ -1165,8 +1223,13 @@ async function saveAdjustment(event) {
   const balanceKey = $("#adjustmentBalance").value;
   const newBalance = parseNumber($("#adjustmentNewBalance").value);
   const currentBalance = balanceValue(getTotals(), balanceKey);
+  const delta = parseNumber($("#adjustmentDelta").value);
   const notes = $("#adjustmentNotes").value.trim();
 
+  if (state.adjustmentOperator === "subtract" && delta > currentBalance) {
+    showToast("Nominal pengurangan melebihi saldo saat ini.", "error");
+    return;
+  }
   if (newBalance === currentBalance) {
     showToast("Saldo baru masih sama dengan saldo saat ini.", "error");
     return;
@@ -1379,6 +1442,12 @@ function parseNumber(value) {
 function formatNumberInput(value) {
   const number = parseNumber(value);
   return number ? new Intl.NumberFormat("id-ID").format(number) : "";
+}
+
+function formatNumberInputIncludingZero(value) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (!digits) return "";
+  return new Intl.NumberFormat("id-ID").format(Number(digits));
 }
 
 function formatRupiah(value) {

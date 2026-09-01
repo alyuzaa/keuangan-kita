@@ -12,7 +12,7 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 - Income dibagi menjadi uang suami, uang istri, tabungan bersama, tabungan istri, dan pendidikan.
 - Outcome memilih sumber dana dan dilindungi dari saldo minus, termasuk kategori Kecantikan.
 - Transfer saldo antar-pos tanpa mencatat income/outcome.
-- Penyesuaian saldo dengan alasan dan jejak perubahan.
+- Penyesuaian saldo dapat dilakukan dengan mengetik saldo akhir atau nominal penambahan/pengurangan, disertai alasan dan jejak perubahan.
 - Pencatatan emas, tanah, perhiasan, kendaraan, properti, dan aset lainnya.
 - Dashboard total kekayaan, saldo tersedia, nilai aset, dan arus bulan berjalan.
 - Riwayat otomatis membuka bulan berjalan dan dapat difilter berdasarkan jenis, bulan, serta pencatat (suami/istri).

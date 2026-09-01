@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Pencatatan keuangan pribadi untuk suami dan istri." />
     <meta name="theme-color" content="#173f33" />
-    <meta name="app-version" content="13.2" />
+    <meta name="app-version" content="13.3" />
     <title>Keuangan Kita</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=13.2" />
+    <link rel="stylesheet" href="./styles.css?v=13.3" />
   </head>
   <body>
     <div id="configError" class="config-error hidden">
@@ -284,7 +284,15 @@
         <div class="form-grid">
           <label class="full"><span>Saldo yang disesuaikan</span><select id="adjustmentBalance" required></select></label>
           <div class="balance-hint full"><span>Saldo saat ini</span><strong id="adjustmentCurrent">Rp0</strong></div>
-          <label class="full"><span>Saldo baru</span><div class="money-field"><b>Rp</b><input id="adjustmentNewBalance" inputmode="numeric" placeholder="0" required /></div></label>
+          <section id="adjustmentEntry" class="adjustment-entry full">
+            <label><span>Saldo baru</span><div class="money-field"><b>Rp</b><input id="adjustmentNewBalance" inputmode="numeric" placeholder="0" required /></div></label>
+            <div class="adjustment-operator" role="group" aria-label="Pilih penambahan atau pengurangan saldo">
+              <button class="active" data-adjustment-operator="add" type="button" aria-label="Tambahkan saldo" aria-pressed="true">＋</button>
+              <button data-adjustment-operator="subtract" type="button" aria-label="Kurangi saldo" aria-pressed="false">−</button>
+            </div>
+            <label><span>Nominal perubahan</span><div class="money-field"><b>Rp</b><input id="adjustmentDelta" inputmode="numeric" placeholder="0" required /></div></label>
+            <small id="adjustmentEquation" class="adjustment-equation">Rp0 + Rp0 = Rp0</small>
+          </section>
           <label class="full"><span>Alasan penyesuaian</span><input id="adjustmentNotes" type="text" minlength="3" maxlength="120" placeholder="Contoh: Koreksi saldo rekening" required /></label>
           <button id="saveAdjustmentButton" class="button primary full submit-button" type="submit">Simpan penyesuaian</button>
         </div>
@@ -334,6 +342,6 @@
     </dialog>
 
     <div id="toastContainer" class="toast-container" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=13.2"></script>
+    <script type="module" src="./app.js?v=13.3"></script>
   </body>
 </html>
