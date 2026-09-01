@@ -28,7 +28,7 @@ const state = {
 };
 
 const incomeCategories = ["Gaji", "Bonus", "Usaha", "Investasi", "Hadiah", "Lainnya"];
-const outcomeCategories = ["Rumah tangga", "Tagihan", "Transportasi", "Kesehatan", "Kecantikan", "Belanja", "Hiburan", "Lainnya"];
+const outcomeCategories = ["Makan & minum", "Tagihan", "Transportasi", "Kesehatan", "Kecantikan", "Belanja", "Hiburan", "Rumah tangga", "Lainnya"];
 const balanceOptions = [
   { key: "husband", label: "Uang suami" },
   { key: "wife", label: "Uang istri" },
@@ -36,7 +36,7 @@ const balanceOptions = [
   { key: "wife_savings", label: "Tabungan istri" },
   { key: "education", label: "Pendidikan" },
 ];
-const chartColors = ["#bd5a58", "#d6a84d", "#3f806b", "#728e60", "#b97891", "#8069a8", "#d07c4f", "#68889c"];
+const chartColors = ["#bd5a58", "#d6a84d", "#3f806b", "#728e60", "#b97891", "#8069a8", "#d07c4f", "#68889c", "#8a918c"];
 const today = new Date().toISOString().slice(0, 10);
 
 const isConfigured =
@@ -576,6 +576,7 @@ function getTotals() {
 
 function renderDashboard() {
   const totals = getTotals();
+  const payday = getNextPaydayInfo();
   $("#totalWealth").textContent = formatRupiah(totals.netWorth);
   $("#savingsBalance").textContent = formatRupiah(totals.savings);
   $("#educationBalance").textContent = formatRupiah(totals.education);
@@ -584,6 +585,10 @@ function renderDashboard() {
   $("#monthIncome").textContent = formatRupiah(totals.monthIncome);
   $("#monthOutcome").textContent = formatRupiah(totals.monthOutcome);
   $("#monthDifference").textContent = formatRupiah(totals.monthIncome - totals.monthOutcome);
+  $("#paydayCountdown").innerHTML = `
+    <span>Menuju gajian</span>
+    <strong>${payday.days} hari lagi</strong>
+    <small>${payday.date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</small>`;
 
   const allocations = [
     { label: "Uang suami", value: totals.husband, icon: "♙", color: "sage" },
@@ -597,6 +602,8 @@ function renderDashboard() {
       <div class="allocation-data">
         <div><span>${item.label}</span><strong>${formatRupiah(item.value)}</strong></div>
         <div class="progress"><i style="width:${Math.max(item.value, 0) / max * 100}%"></i></div>
+        <div class="daily-spending"><span>Rekomendasi pengeluaran per hari</span><strong>${formatRupiah(Math.floor(Math.max(item.value, 0) / payday.days))}</strong></div>
+        <small class="daily-formula">Panduan saja · Saldo ÷ ${payday.days} hari</small>
       </div>
     </div>
   `).join("");
@@ -1478,6 +1485,17 @@ function formatDateTime(value) {
 
 function formatPercentage(value) {
   return `${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 }).format(value)}%`;
+}
+
+function getNextPaydayInfo(referenceDate = new Date()) {
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth();
+  const day = referenceDate.getDate();
+  const payday = new Date(year, month + (day >= 10 ? 1 : 0), 10);
+  const currentUtc = Date.UTC(year, month, day);
+  const paydayUtc = Date.UTC(payday.getFullYear(), payday.getMonth(), payday.getDate());
+  const days = Math.max(1, Math.round((paydayUtc - currentUtc) / 86400000));
+  return { date: payday, days };
 }
 
 function historyCategoryColor(category, type) {

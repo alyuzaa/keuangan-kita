@@ -148,6 +148,10 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .month-net { display: flex; justify-content: space-between; margin-top: 12px; padding-top: 14px; border-top: 1px dashed #d6d7d0; font-size: 11px; }
 .month-net strong { color: #1f604b; }
 .allocation-card { grid-column: 1; }
+.payday-countdown { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; padding: 7px 9px; border-radius: 11px; color: #64736a; background: #eef2e9; line-height: 1.15; }
+.payday-countdown span { font-size: 7px; }
+.payday-countdown strong { margin-top: 2px; color: #1f604b; font-size: 10px; white-space: nowrap; }
+.payday-countdown small { margin-top: 2px; color: #849087; font-size: 7px; white-space: nowrap; }
 .allocation-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 21px; }
 .allocation-item { min-width: 0; display: flex; gap: 12px; align-items: center; }
 .allocation-icon { flex: 0 0 auto; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 13px; font-size: 17px; }
@@ -160,6 +164,11 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .progress { height: 4px; margin-top: 9px; overflow: hidden; border-radius: 99px; background: #ecece6; }
 .progress i { height: 100%; display: block; border-radius: inherit; background: #4d8c71; }
 .allocation-item:nth-child(2) .progress i { background: #c88076; }
+.daily-spending { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; margin-top: 9px; padding-top: 8px; border-top: 1px dashed #dedfd8; }
+.daily-spending span { max-width: 145px; font-size: 8px; line-height: 1.35; }
+.daily-spending strong { flex: 0 0 auto; margin: 0; color: #277565; font-size: 10px; }
+.allocation-item:nth-child(2) .daily-spending strong { color: #b35f65; }
+.daily-formula { display: block; margin-top: 3px; color: #a0a6a1; font-size: 7px; }
 .recent-card { grid-column: 1; }
 .asset-snapshot { grid-column: 2; grid-row: 2 / span 2; }
 .recent-row { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid #ecebe5; }
@@ -240,6 +249,7 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .chart-color-5 { --chart-color: #8069a8; }
 .chart-color-6 { --chart-color: #d07c4f; }
 .chart-color-7 { --chart-color: #68889c; }
+.chart-color-8 { --chart-color: #8a918c; }
 .chart-legend-row > i { width: 8px; height: 8px; border-radius: 50%; background: var(--chart-color); }
 .chart-legend-row > div { min-width: 0; display: flex; align-items: baseline; gap: 5px; }
 .chart-legend-row strong { overflow: hidden; color: var(--chart-color); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
