@@ -22,7 +22,7 @@ const state = {
 };
 
 const incomeCategories = ["Gaji", "Bonus", "Usaha", "Investasi", "Hadiah", "Lainnya"];
-const outcomeCategories = ["Rumah tangga", "Tagihan", "Transportasi", "Kesehatan", "Belanja", "Hiburan", "Lainnya"];
+const outcomeCategories = ["Rumah tangga", "Tagihan", "Transportasi", "Kesehatan", "Kecantikan", "Belanja", "Hiburan", "Lainnya"];
 const today = new Date().toISOString().slice(0, 10);
 
 const isConfigured =
