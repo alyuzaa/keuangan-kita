@@ -88,7 +88,7 @@ async function handleSession(session) {
 async function loadHousehold() {
   const { data, error } = await supabase
     .from("household_members")
-    .select("household_id, role, households!inner(id, name, invite_code)")
+    .select("household_id, role, display_name, households!inner(id, name, invite_code)")
     .eq("user_id", state.user.id)
     .maybeSingle();
 
@@ -108,6 +108,7 @@ async function loadHousehold() {
   state.household = {
     ...data.households,
     role: data.role,
+    display_name: data.display_name,
   };
 
   showScreen("app");
@@ -132,7 +133,7 @@ async function loadFinanceData() {
       .order("created_at", { ascending: false }),
     supabase
       .from("household_members")
-      .select("user_id, role, email")
+      .select("user_id, role, display_name")
       .eq("household_id", householdId),
   ]);
 
@@ -156,6 +157,7 @@ function bindEvents() {
   $("#joinHouseholdForm").addEventListener("submit", joinHousehold);
   $("#onboardingLogout").addEventListener("click", logout);
   $("#logoutButton").addEventListener("click", logout);
+  $("#editUserNameButton").addEventListener("click", openUserNameDialog);
   $("#copyInviteCode").addEventListener("click", copyInviteCode);
 
   $$(".nav-button").forEach((button) => {
@@ -170,9 +172,11 @@ function bindEvents() {
 
   $("#transactionDialog .modal-close").addEventListener("click", () => $("#transactionDialog").close());
   $("#assetDialog .modal-close").addEventListener("click", () => $("#assetDialog").close());
+  $("#userNameDialog .modal-close").addEventListener("click", () => $("#userNameDialog").close());
   $("#transactionForm").addEventListener("submit", saveTransaction);
   $("#assetForm").addEventListener("submit", saveAsset);
   $("#passwordForm").addEventListener("submit", saveNewPassword);
+  $("#userNameForm").addEventListener("submit", saveUserName);
   $$(".modal").forEach((dialog) => dialog.addEventListener("close", unlockPageScroll));
 
   $$(".filter-tabs button").forEach((button) => {
@@ -350,13 +354,47 @@ function showScreen(screen) {
 function fillProfile() {
   const email = state.user.email ?? "";
   const fallbackName = email.split("@")[0] || "Pengguna";
-  const name = state.user.user_metadata?.full_name || fallbackName;
+  const currentMember = state.householdMembers.find((member) => member.user_id === state.user.id);
+  const name = currentMember?.display_name || state.household.display_name || fallbackName;
   $("#userName").textContent = name;
   $("#userEmail").textContent = email;
   $("#userAvatar").textContent = name.slice(0, 1).toUpperCase();
   $("#sidebarHousehold").textContent = state.household.name;
   $("#mobileHouseholdName").textContent = state.household.name;
   $("#sidebarInviteCode").textContent = state.household.invite_code;
+}
+
+function openUserNameDialog() {
+  const email = state.user.email ?? "";
+  const fallbackName = email.split("@")[0] || "Pengguna";
+  const currentMember = state.householdMembers.find((member) => member.user_id === state.user.id);
+  $("#userNameInput").value = currentMember?.display_name || state.household.display_name || fallbackName;
+  openModal($("#userNameDialog"));
+  setTimeout(() => $("#userNameInput").focus(), 0);
+}
+
+async function saveUserName(event) {
+  event.preventDefault();
+  const displayName = $("#userNameInput").value.trim();
+  if (!displayName) {
+    showToast("Nama pengguna tidak boleh kosong.", "error");
+    return;
+  }
+
+  const button = $("#saveUserNameButton");
+  setButtonBusy(button, true, "Menyimpan…");
+  const { error } = await supabase.rpc("update_own_display_name", { new_display_name: displayName });
+
+  if (error) {
+    showToast(error.message, "error");
+  } else {
+    state.household.display_name = displayName;
+    $("#userNameDialog").close();
+    await loadFinanceData();
+    fillProfile();
+    showToast("Nama pengguna berhasil diperbarui.");
+  }
+  setButtonBusy(button, false);
 }
 
 async function copyInviteCode() {
@@ -608,7 +646,8 @@ function transactionDetailsHtml(item) {
   const member = transactionMember(item);
   const role = member?.role === "owner" ? "owner" : member?.role === "member" ? "member" : "unknown";
   const roleLabel = role === "owner" ? "Suami" : role === "member" ? "Istri" : "Anggota";
-  const email = member?.email || (item.user_id === state.user?.id ? state.user.email : "Email tidak tersedia");
+  const fallbackName = item.user_id === state.user?.id ? (state.user.email?.split("@")[0] || "Pengguna") : "Pengguna";
+  const displayName = member?.display_name || fallbackName;
   const description = item.description || (item.type === "income" ? "Pemasukan keluarga" : "Pengeluaran keluarga");
 
   return `
@@ -616,7 +655,7 @@ function transactionDetailsHtml(item) {
       <strong>${escapeHtml(item.category)}</strong>
       <span class="transaction-description">${escapeHtml(description)}</span>
       <time datetime="${escapeHtml(item.date)}">${formatDate(item.date, true)}</time>
-      <small class="member-email ${role}" title="Dicatat oleh ${roleLabel}">${escapeHtml(email)}</small>
+      <small class="member-name ${role}" title="Dicatat oleh ${roleLabel}">${escapeHtml(displayName)}</small>
     </div>
   `;
 }

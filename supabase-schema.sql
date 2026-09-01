@@ -18,6 +18,7 @@ create table if not exists public.household_members (
   user_id uuid not null references auth.users(id) on delete cascade,
   role text not null default 'member' check (role in ('owner', 'member')),
   email text not null check (char_length(email) between 3 and 320),
+  display_name text not null check (char_length(display_name) between 1 and 40),
   joined_at timestamptz not null default now(),
   primary key (household_id, user_id),
   unique (user_id)
@@ -42,6 +43,23 @@ alter table public.household_members
 
 alter table public.household_members
   alter column email set not null;
+
+alter table public.household_members
+  add column if not exists display_name text;
+
+update public.household_members
+set display_name = left(split_part(email, '@', 1), 40)
+where display_name is null or btrim(display_name) = '';
+
+alter table public.household_members
+  drop constraint if exists household_members_display_name_check;
+
+alter table public.household_members
+  add constraint household_members_display_name_check
+  check (char_length(btrim(display_name)) between 1 and 40);
+
+alter table public.household_members
+  alter column display_name set not null;
 
 create table if not exists public.transactions (
   id uuid primary key default gen_random_uuid(),
@@ -117,7 +135,38 @@ begin
     raise exception 'User email not found';
   end if;
 
+  if new.display_name is null or btrim(new.display_name) = '' then
+    new.display_name := left(split_part(new.email, '@', 1), 40);
+  end if;
+
   return new;
+end;
+$$;
+
+create or replace function public.update_own_display_name(new_display_name text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  clean_name text := btrim(new_display_name);
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  if clean_name is null or char_length(clean_name) not between 1 and 40 then
+    raise exception 'Name must contain 1 to 40 characters';
+  end if;
+
+  update public.household_members
+  set display_name = clean_name
+  where user_id = auth.uid();
+
+  if not found then
+    raise exception 'Household member not found';
+  end if;
 end;
 $$;
 
@@ -332,9 +381,11 @@ grant select, insert, update, delete on public.assets to authenticated;
 
 revoke execute on function public.is_household_member(uuid) from public, anon;
 revoke execute on function public.set_household_member_email() from public, anon, authenticated;
+revoke execute on function public.update_own_display_name(text) from public, anon;
 revoke execute on function public.create_household(text) from public, anon;
 revoke execute on function public.join_household(text) from public, anon;
 
 grant execute on function public.is_household_member(uuid) to authenticated;
+grant execute on function public.update_own_display_name(text) to authenticated;
 grant execute on function public.create_household(text) to authenticated;
 grant execute on function public.join_household(text) to authenticated;

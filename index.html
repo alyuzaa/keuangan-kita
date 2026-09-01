@@ -103,7 +103,10 @@
 
         <div class="user-panel">
           <div id="userAvatar" class="avatar">U</div>
-          <div><strong id="userName">Pengguna</strong><small id="userEmail"></small></div>
+          <div class="user-info">
+            <div class="user-name-row"><strong id="userName">Pengguna</strong><button id="editUserNameButton" class="name-edit-button" type="button" aria-label="Edit nama pengguna" title="Edit nama">✎</button></div>
+            <small id="userEmail"></small>
+          </div>
           <button id="logoutButton" class="logout-button" type="button" aria-label="Keluar dari akun"><span class="logout-icon">↪</span><span class="logout-label">Keluar</span></button>
         </div>
       </aside>
@@ -147,7 +150,7 @@
             </article>
 
             <article class="allocation-card panel">
-              <div class="section-title"><div><span>Pembagian saldo</span><h3>Sisa saldo bulan ini</h3></div></div>
+              <div class="section-title"><div><span>Pembagian saldo</span><h3>Sisa saldo saat ini</h3></div></div>
               <div id="allocationList" class="allocation-list"></div>
             </article>
 
@@ -255,6 +258,17 @@
         <div class="form-grid">
           <label class="full"><span>Password baru</span><input id="newPassword" type="password" minlength="6" autocomplete="new-password" required /></label>
           <button id="savePasswordButton" class="button primary full submit-button" type="submit">Simpan password baru</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="userNameDialog" class="modal small-modal">
+      <form id="userNameForm" method="dialog">
+        <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
+        <header><h2>Edit nama pengguna</h2><p>Nama ini akan tampil pada seluruh riwayat transaksi yang kamu catat.</p></header>
+        <div class="form-grid">
+          <label class="full"><span>Nama pengguna</span><input id="userNameInput" type="text" minlength="1" maxlength="40" autocomplete="nickname" required /></label>
+          <button id="saveUserNameButton" class="button primary full submit-button" type="submit">Simpan nama</button>
         </div>
       </form>
     </dialog>
