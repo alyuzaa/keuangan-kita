@@ -154,6 +154,9 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .payday-countdown small { margin-top: 2px; color: #849087; font-size: 7px; white-space: nowrap; }
 .allocation-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 21px; }
 .allocation-item { min-width: 0; display: flex; gap: 12px; align-items: center; }
+.allocation-item-button { margin: -9px; padding: 9px; border-radius: 15px; cursor: pointer; transition: background .18s, box-shadow .18s; }
+.allocation-item-button:hover { background: #f6f7f1; }
+.allocation-item-button:focus-visible { outline: 2px solid #6c9a84; outline-offset: 2px; }
 .allocation-icon { flex: 0 0 auto; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 13px; font-size: 17px; }
 .allocation-icon.sage { color: #23624d; background: #e5efe8; }
 .allocation-icon.rose { color: #a75255; background: #f6e9e6; }
@@ -168,7 +171,8 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .daily-spending span { max-width: 145px; font-size: 8px; line-height: 1.35; }
 .daily-spending strong { flex: 0 0 auto; margin: 0; color: #277565; font-size: 10px; }
 .allocation-item:nth-child(2) .daily-spending strong { color: #b35f65; }
-.daily-formula { display: block; margin-top: 3px; color: #a0a6a1; font-size: 7px; }
+.monthly-bill-summary { display: block; margin-top: 4px; color: #87918b; font-size: 7px; line-height: 1.35; }
+.monthly-bill-summary.warning { color: var(--red); font-weight: 750; }
 .recent-card { grid-column: 1; }
 .asset-snapshot { grid-column: 2; grid-row: 2 / span 2; }
 .recent-row { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid #ecebe5; }
@@ -302,6 +306,43 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .modal::backdrop { background: rgba(16, 34, 28, .48); backdrop-filter: blur(3px); }
 .modal > form { position: relative; padding: 28px; }
 .transaction-detail-content { position: relative; padding: 28px; }
+.monthly-bills-content { position: relative; padding: 28px; }
+.bills-modal { width: min(calc(100% - 30px), 620px); }
+.monthly-bills-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 20px 0 15px; padding: 12px 14px; border-radius: 13px; background: #eef2e9; }
+.monthly-bills-toolbar > div { display: flex; flex-direction: column; gap: 3px; }
+.monthly-bills-toolbar span { color: #738078; font-size: 8px; }
+.monthly-bills-toolbar strong { color: #1f604b; font-size: 12px; }
+.monthly-bills-toolbar .button { min-height: 35px; border-radius: 10px; font-size: 10px; }
+.monthly-bill-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; padding: 15px; border: 1px solid #dfe3dc; border-radius: 15px; background: #f8f8f3; }
+.monthly-bill-form-heading { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; }
+.monthly-bill-form-heading strong { font-size: 11px; }
+.monthly-bill-form-heading button { padding: 4px 0; border: 0; color: #7b8780; background: transparent; font-size: 9px; }
+.monthly-bill-form > label:first-of-type, .monthly-bill-form > .button { grid-column: 1 / -1; }
+.monthly-bill-form .button { min-height: 41px; }
+.monthly-bills-list { display: grid; }
+.monthly-bill-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 52px; align-items: center; gap: 12px; padding: 14px 7px; border-top: 1px solid #e8e8e1; }
+.monthly-bill-row.paid { background: #fafbf7; }
+.monthly-bill-main { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.monthly-bill-main > strong { max-width: 100%; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.monthly-bill-main > span { margin-top: 3px; color: #1f604b; font-size: 10px; font-weight: 750; }
+.monthly-bill-actions { display: flex; gap: 3px; margin-top: 5px; }
+.monthly-bill-actions button { width: 23px; height: 23px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 7px; color: #7d8982; background: #f0f1eb; font-size: 12px; }
+.monthly-bill-actions button:last-child { color: #a85a52; }
+.monthly-bill-date { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+.monthly-bill-date span { color: #8a938d; font-size: 7px; }
+.monthly-bill-date strong { margin-top: 3px; font-size: 9px; white-space: nowrap; }
+.monthly-bill-check { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; }
+.monthly-bill-check input { position: absolute; opacity: 0; pointer-events: none; }
+.monthly-bill-check > span { width: 29px; height: 29px; display: grid; place-items: center; border: 1px solid #d6dad3; border-radius: 9px; color: transparent; background: white; font-size: 14px; font-weight: 850; transition: color .18s, border .18s, background .18s; }
+.monthly-bill-check input:checked + span { color: white; border-color: #277565; background: #277565; }
+.monthly-bill-check input:focus-visible + span { outline: 2px solid #719382; outline-offset: 2px; }
+.monthly-bill-check small { color: #89928c; font-size: 7px; }
+.monthly-bill-check.readonly { cursor: default; opacity: .68; }
+.monthly-bills-empty { min-height: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+.monthly-bills-empty > span { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; color: #277565; background: #e7f0e9; font-size: 21px; }
+.monthly-bills-empty strong { margin-top: 10px; font-size: 12px; }
+.monthly-bills-empty p { max-width: 320px; margin: 5px 0 0; color: #839088; font-size: 9px; line-height: 1.5; }
+.monthly-bills-access-note { margin: 14px 0 0; padding-top: 12px; border-top: 1px dashed #d8dad3; color: #89928c; font-size: 8px; line-height: 1.5; }
 .transaction-detail-content header { padding-right: 38px; }
 .detail-type { color: #9a8553; font-size: 8px; font-weight: 850; letter-spacing: .12em; }
 .transaction-detail-content header h2 { margin-top: 5px; }
@@ -471,6 +512,8 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
   .toast { width: auto; max-width: min(220px, calc(100vw - 135px)); padding: 9px 11px; border-radius: 10px; font-size: 9px; line-height: 1.35; box-shadow: 0 6px 18px rgba(33, 61, 49, .14); }
   .transaction-detail-modal { width: 100%; max-width: none; max-height: 88vh; margin: auto 0 0; border-width: 1px 0 0; border-radius: 24px 24px 0 0; }
   .transaction-detail-content { padding: 24px 20px calc(24px + env(safe-area-inset-bottom)); }
+  .bills-modal { width: 100%; max-width: none; max-height: 92vh; margin: auto 0 0; border-width: 1px 0 0; border-radius: 24px 24px 0 0; }
+  .monthly-bills-content { padding: 24px 20px calc(24px + env(safe-area-inset-bottom)); }
 }
 
 @media (max-width: 430px) {
@@ -483,4 +526,6 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
   .history-chart-layout { grid-template-columns: 124px minmax(0, 1fr); gap: 12px; }
   .chart-legend-row { gap: 5px; }
   .chart-legend-row > b { font-size: 7px; }
+  .monthly-bill-row { grid-template-columns: minmax(0, 1fr) auto 45px; gap: 8px; padding-inline: 2px; }
+  .monthly-bill-date strong { font-size: 8px; }
 }

@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Pencatatan keuangan pribadi untuk suami dan istri." />
     <meta name="theme-color" content="#173f33" />
-    <meta name="app-version" content="13.4" />
+    <meta name="app-version" content="14" />
     <title>Keuangan Kita</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=13.4" />
+    <link rel="stylesheet" href="./styles.css?v=14" />
   </head>
   <body>
     <div id="configError" class="config-error hidden">
@@ -299,6 +299,26 @@
       </form>
     </dialog>
 
+    <dialog id="monthlyBillsDialog" class="modal bills-modal">
+      <div class="monthly-bills-content">
+        <button class="modal-close" type="button" aria-label="Tutup">×</button>
+        <header><span class="detail-type">TAGIHAN BULANAN</span><h2 id="monthlyBillsTitle">Uang suami</h2><p id="monthlyBillsCopy">Atur pengeluaran tetap setiap bulan.</p></header>
+        <div class="monthly-bills-toolbar">
+          <div><span>Belum dibayar bulan ini</span><strong id="monthlyBillsUnpaidTotal">Rp0</strong></div>
+          <button id="addMonthlyBillButton" class="button primary" type="button">＋ Tambah</button>
+        </div>
+        <form id="monthlyBillForm" class="monthly-bill-form hidden">
+          <div class="monthly-bill-form-heading"><strong id="monthlyBillFormTitle">Tambah tagihan</strong><button id="cancelMonthlyBillButton" type="button">Batal</button></div>
+          <label><span>Keterangan</span><input id="monthlyBillName" type="text" maxlength="80" placeholder="Contoh: Paket data" required /></label>
+          <label><span>Nominal</span><div class="money-field small"><b>Rp</b><input id="monthlyBillAmount" inputmode="numeric" placeholder="0" required /></div></label>
+          <label><span>Tanggal berlangganan</span><input id="monthlyBillSubscriptionDay" type="number" inputmode="numeric" min="1" max="31" placeholder="Contoh: 7" required /></label>
+          <button id="saveMonthlyBillButton" class="button primary full" type="submit">Selesai</button>
+        </form>
+        <div id="monthlyBillsList" class="monthly-bills-list"></div>
+        <p id="monthlyBillsAccessNote" class="monthly-bills-access-note"></p>
+      </div>
+    </dialog>
+
     <dialog id="assetDialog" class="modal">
       <form id="assetForm" method="dialog">
         <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
@@ -342,6 +362,6 @@
     </dialog>
 
     <div id="toastContainer" class="toast-container" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=13.4"></script>
+    <script type="module" src="./app.js?v=14"></script>
   </body>
 </html>

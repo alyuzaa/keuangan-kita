@@ -15,6 +15,8 @@ const state = {
   transfers: [],
   adjustments: [],
   auditLogs: [],
+  monthlyBills: [],
+  monthlyBillPayments: [],
   authMode: "login",
   transactionMode: "income",
   transactionFilter: "all",
@@ -23,6 +25,8 @@ const state = {
   adjustmentOperator: "add",
   editingTransactionId: null,
   editingAssetId: null,
+  editingMonthlyBillId: null,
+  activeMonthlyBillBalance: "husband",
   activeView: "dashboard",
   lockedScrollY: 0,
 };
@@ -94,6 +98,8 @@ async function handleSession(session) {
     state.transfers = [];
     state.adjustments = [];
     state.auditLogs = [];
+    state.monthlyBills = [];
+    state.monthlyBillPayments = [];
     state.transactionMonth = currentMonthKey;
     showScreen("auth");
     setBusy(false);
@@ -137,7 +143,7 @@ async function loadHousehold() {
 async function loadFinanceData() {
   setBusy(true);
   const householdId = state.household.id;
-  const [transactionsResult, assetsResult, membersResult, transfersResult, adjustmentsResult, logsResult] = await Promise.all([
+  const [transactionsResult, assetsResult, membersResult, transfersResult, adjustmentsResult, logsResult, billsResult, billPaymentsResult] = await Promise.all([
     supabase
       .from("transactions")
       .select("*")
@@ -169,6 +175,18 @@ async function loadFinanceData() {
       .select("*")
       .eq("household_id", householdId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("monthly_bills")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("balance_key", { ascending: true })
+      .order("subscription_day", { ascending: true })
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("monthly_bill_payments")
+      .select("*")
+      .eq("household_id", householdId)
+      .eq("billing_month", currentBillingMonthKey()),
   ]);
 
   const loadError = transactionsResult.error
@@ -176,7 +194,9 @@ async function loadFinanceData() {
     || membersResult.error
     || transfersResult.error
     || adjustmentsResult.error
-    || logsResult.error;
+    || logsResult.error
+    || billsResult.error
+    || billPaymentsResult.error;
   if (loadError) {
     showToast(loadError.message || "Data gagal dimuat.", "error");
   } else {
@@ -186,6 +206,8 @@ async function loadFinanceData() {
     state.transfers = transfersResult.data ?? [];
     state.adjustments = adjustmentsResult.data ?? [];
     state.auditLogs = logsResult.data ?? [];
+    state.monthlyBills = billsResult.data ?? [];
+    state.monthlyBillPayments = billPaymentsResult.data ?? [];
     renderAll();
   }
   setBusy(false);
@@ -222,12 +244,17 @@ function bindEvents() {
   $("#transactionDetailDialog").addEventListener("click", closeTransactionDetailFromBackdrop);
   $("#transferDialog .modal-close").addEventListener("click", () => $("#transferDialog").close());
   $("#adjustmentDialog .modal-close").addEventListener("click", () => $("#adjustmentDialog").close());
+  $("#monthlyBillsDialog .modal-close").addEventListener("click", () => $("#monthlyBillsDialog").close());
+  $("#monthlyBillsDialog").addEventListener("click", closeMonthlyBillsFromBackdrop);
   $("#transactionForm").addEventListener("submit", saveTransaction);
   $("#assetForm").addEventListener("submit", saveAsset);
   $("#passwordForm").addEventListener("submit", saveNewPassword);
   $("#userNameForm").addEventListener("submit", saveUserName);
   $("#transferForm").addEventListener("submit", saveTransfer);
   $("#adjustmentForm").addEventListener("submit", saveAdjustment);
+  $("#monthlyBillForm").addEventListener("submit", saveMonthlyBill);
+  $("#addMonthlyBillButton").addEventListener("click", () => openMonthlyBillForm());
+  $("#cancelMonthlyBillButton").addEventListener("click", closeMonthlyBillForm);
   $$(".modal").forEach((dialog) => dialog.addEventListener("close", unlockPageScroll));
 
   $$(".filter-tabs button").forEach((button) => {
@@ -266,6 +293,7 @@ function bindEvents() {
     "#transferAmount",
     "#adjustmentNewBalance",
     "#adjustmentDelta",
+    "#monthlyBillAmount",
   ].forEach((selector) => {
     $(selector).addEventListener("input", (event) => {
       const keepZero = selector === "#adjustmentNewBalance" || selector === "#adjustmentDelta";
@@ -591,22 +619,41 @@ function renderDashboard() {
     <small>${payday.date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</small>`;
 
   const allocations = [
-    { label: "Uang suami", value: totals.husband, icon: "♙", color: "sage" },
-    { label: "Uang istri", value: totals.wife, icon: "♡", color: "rose" },
+    { balanceKey: "husband", label: "Uang suami", value: totals.husband, icon: "♙", color: "sage" },
+    { balanceKey: "wife", label: "Uang istri", value: totals.wife, icon: "♡", color: "rose" },
   ];
   const max = Math.max(...allocations.map((item) => Math.max(item.value, 0)), 1);
 
-  $("#allocationList").innerHTML = allocations.map((item) => `
-    <div class="allocation-item">
+  $("#allocationList").innerHTML = allocations.map((item) => {
+    const unpaidBills = unpaidBillsForBalance(item.balanceKey);
+    const unpaidTotal = unpaidBills.reduce((sum, bill) => sum + Number(bill.amount), 0);
+    const spendableBalance = Math.max(Number(item.value) - unpaidTotal, 0);
+    const dailyRecommendation = Math.floor(spendableBalance / payday.days);
+    const billSummary = unpaidBills.length
+      ? `${unpaidBills.length} tagihan belum dibayar · ${formatRupiah(unpaidTotal)}`
+      : "Ketuk untuk mengatur tagihan bulanan";
+    return `
+    <article class="allocation-item allocation-item-button" data-open-monthly-bills="${item.balanceKey}" role="button" tabindex="0" aria-label="Buka tagihan bulanan ${item.label}">
       <div class="allocation-icon ${item.color}">${item.icon}</div>
       <div class="allocation-data">
         <div><span>${item.label}</span><strong>${formatRupiah(item.value)}</strong></div>
         <div class="progress"><i style="width:${Math.max(item.value, 0) / max * 100}%"></i></div>
-        <div class="daily-spending"><span>Rekomendasi pengeluaran per hari</span><strong>${formatRupiah(Math.floor(Math.max(item.value, 0) / payday.days))}</strong></div>
-        <small class="daily-formula">Panduan saja · Saldo ÷ ${payday.days} hari</small>
+        <div class="daily-spending"><span>Rekomendasi pengeluaran per hari</span><strong>${formatRupiah(dailyRecommendation)}</strong></div>
+        <small class="monthly-bill-summary${unpaidTotal > Number(item.value) ? " warning" : ""}">${billSummary}</small>
       </div>
-    </div>
-  `).join("");
+    </article>`;
+  }).join("");
+
+  $$('[data-open-monthly-bills]').forEach((item) => {
+    const openBills = () => openMonthlyBillsDialog(item.dataset.openMonthlyBills);
+    item.addEventListener("click", openBills);
+    item.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openBills();
+      }
+    });
+  });
 
   const recent = state.transactions.slice(0, 5);
   $("#recentTransactions").innerHTML = recent.length
@@ -843,6 +890,13 @@ function logDetail(log) {
   if (log.entity_type === "adjustment") {
     return `${escapeHtml(sourceLabel(record.balance_key))}: ${formatRupiah(record.previous_balance)} → ${formatRupiah(record.new_balance)}${record.notes ? ` · ${escapeHtml(record.notes)}` : ""}`;
   }
+  if (log.entity_type === "monthly_bill") {
+    return `${escapeHtml(record.name || "Tagihan bulanan")} · ${formatRupiah(record.amount)} · Tanggal berlangganan ${Number(record.subscription_day) || "—"}`;
+  }
+  if (log.entity_type === "bill_payment") {
+    const month = record.billing_month ? formatBillingMonth(record.billing_month) : "bulan berjalan";
+    return `${escapeHtml(details.bill_name || "Tagihan bulanan")} · ${escapeHtml(month)}`;
+  }
   if (log.entity_type === "transaction") {
     return `${escapeHtml(record.category || "Transaksi")} · ${formatRupiah(record.amount)}`;
   }
@@ -855,6 +909,8 @@ function logDetail(log) {
 function logIcon(log) {
   if (log.entity_type === "transfer") return "⇄";
   if (log.entity_type === "adjustment") return "±";
+  if (log.entity_type === "monthly_bill") return "↻";
+  if (log.entity_type === "bill_payment") return "✓";
   if (log.entity_type === "asset") return "◇";
   if (log.action === "delete") return "×";
   if (log.action === "update") return "✎";
@@ -1263,6 +1319,254 @@ async function saveAdjustment(event) {
   setButtonBusy(button, false);
 }
 
+function currentBillingMonthKey(referenceDate = new Date()) {
+  return `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function editableMonthlyBillBalance() {
+  return state.household?.role === "owner" ? "husband" : "wife";
+}
+
+function canEditMonthlyBillBalance(balanceKey) {
+  return editableMonthlyBillBalance() === balanceKey;
+}
+
+function isMonthlyBillPaid(billId) {
+  return state.monthlyBillPayments.some((payment) => String(payment.monthly_bill_id) === String(billId));
+}
+
+function unpaidBillsForBalance(balanceKey) {
+  return state.monthlyBills.filter((bill) => bill.balance_key === balanceKey && !isMonthlyBillPaid(bill.id));
+}
+
+function openMonthlyBillsDialog(balanceKey) {
+  if (!['husband', 'wife'].includes(balanceKey)) return;
+  state.activeMonthlyBillBalance = balanceKey;
+  closeMonthlyBillForm();
+
+  const ownBalance = canEditMonthlyBillBalance(balanceKey);
+  $("#monthlyBillsTitle").textContent = sourceLabel(balanceKey);
+  $("#monthlyBillsCopy").textContent = ownBalance
+    ? "Tambahkan pengeluaran tetap dan tandai status pembayarannya setiap bulan."
+    : `Detail tagihan ${sourceLabel(balanceKey).toLowerCase()}. Kamu hanya dapat melihat data ini.`;
+  $("#addMonthlyBillButton").classList.toggle("hidden", !ownBalance);
+  $("#monthlyBillsAccessNote").textContent = ownBalance
+    ? "Checklist hanya menjadi penanda. Pembayaran tetap dicatat manual melalui Outcome."
+    : `Mode lihat · Hanya pemilik ${sourceLabel(balanceKey).toLowerCase()} yang dapat menambah, mengubah, menghapus, atau mencentang tagihan.`;
+
+  renderMonthlyBills();
+  openModal($("#monthlyBillsDialog"));
+}
+
+function renderMonthlyBills() {
+  const balanceKey = state.activeMonthlyBillBalance;
+  const bills = state.monthlyBills.filter((bill) => bill.balance_key === balanceKey);
+  const unpaidTotal = bills
+    .filter((bill) => !isMonthlyBillPaid(bill.id))
+    .reduce((sum, bill) => sum + Number(bill.amount), 0);
+  const canEdit = canEditMonthlyBillBalance(balanceKey);
+  $("#monthlyBillsUnpaidTotal").textContent = formatRupiah(unpaidTotal);
+
+  if (!bills.length) {
+    $("#monthlyBillsList").innerHTML = `
+      <div class="monthly-bills-empty">
+        <span>↻</span>
+        <strong>Belum ada tagihan bulanan</strong>
+        <p>${canEdit ? "Tekan tombol Tambah untuk mencatat paket data, iCloud, atau langganan lainnya." : "Pemilik saldo belum menambahkan tagihan bulanan."}</p>
+      </div>`;
+    return;
+  }
+
+  $("#monthlyBillsList").innerHTML = bills.map((bill) => {
+    const paid = isMonthlyBillPaid(bill.id);
+    const subscription = monthlyBillSubscriptionInfo(bill, paid);
+    return `
+      <article class="monthly-bill-row${paid ? " paid" : ""}">
+        <div class="monthly-bill-main">
+          <strong>${escapeHtml(bill.name)}</strong>
+          <span>${formatRupiah(bill.amount)}</span>
+          ${canEdit ? `<div class="monthly-bill-actions"><button data-edit-monthly-bill="${bill.id}" type="button" aria-label="Edit ${escapeHtml(bill.name)}">✎</button><button data-delete-monthly-bill="${bill.id}" type="button" aria-label="Hapus ${escapeHtml(bill.name)}">×</button></div>` : ""}
+        </div>
+        <div class="monthly-bill-date">
+          <span>${subscription.label}</span>
+          <strong>${subscription.date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</strong>
+        </div>
+        <label class="monthly-bill-check${canEdit ? "" : " readonly"}" title="${paid ? "Sudah dibayar" : "Belum dibayar"}">
+          <input data-toggle-monthly-bill="${bill.id}" type="checkbox" ${paid ? "checked" : ""} ${canEdit ? "" : "disabled"} />
+          <span aria-hidden="true">✓</span>
+          <small>${paid ? "Sudah" : "Belum"}</small>
+        </label>
+      </article>`;
+  }).join("");
+
+  $$('[data-toggle-monthly-bill]').forEach((input) => {
+    input.addEventListener("change", () => toggleMonthlyBillPayment(input.dataset.toggleMonthlyBill, input.checked));
+  });
+  $$('[data-edit-monthly-bill]').forEach((button) => {
+    button.addEventListener("click", () => openMonthlyBillForm(button.dataset.editMonthlyBill));
+  });
+  $$('[data-delete-monthly-bill]').forEach((button) => {
+    button.addEventListener("click", () => deleteMonthlyBill(button.dataset.deleteMonthlyBill));
+  });
+}
+
+function monthlyBillSubscriptionInfo(bill, paid) {
+  const now = new Date();
+  const thisMonthDate = clampedMonthDate(now.getFullYear(), now.getMonth(), Number(bill.subscription_day));
+  if (paid) {
+    return {
+      date: clampedMonthDate(now.getFullYear(), now.getMonth() + 1, Number(bill.subscription_day)),
+      label: "Berlangganan kembali",
+    };
+  }
+  return {
+    date: thisMonthDate,
+    label: now > endOfLocalDay(thisMonthDate) ? "Belum dibayar sejak" : "Tanggal berlangganan",
+  };
+}
+
+function clampedMonthDate(year, month, day) {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(day, lastDay));
+}
+
+function endOfLocalDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+}
+
+function openMonthlyBillForm(billId = null) {
+  if (!canEditMonthlyBillBalance(state.activeMonthlyBillBalance)) return;
+  state.editingMonthlyBillId = billId;
+  $("#monthlyBillForm").reset();
+  $("#monthlyBillSubscriptionDay").value = String(new Date().getDate());
+  $("#monthlyBillFormTitle").textContent = billId ? "Edit tagihan" : "Tambah tagihan";
+  $("#saveMonthlyBillButton").textContent = billId ? "Simpan perubahan" : "Selesai";
+
+  if (billId) {
+    const bill = state.monthlyBills.find((item) => String(item.id) === String(billId));
+    if (!bill || bill.balance_key !== state.activeMonthlyBillBalance) return;
+    $("#monthlyBillName").value = bill.name;
+    $("#monthlyBillAmount").value = formatNumberInput(bill.amount);
+    $("#monthlyBillSubscriptionDay").value = String(bill.subscription_day);
+  }
+
+  $("#monthlyBillForm").classList.remove("hidden");
+  $("#addMonthlyBillButton").classList.add("hidden");
+  $("#monthlyBillName").focus();
+}
+
+function closeMonthlyBillForm() {
+  state.editingMonthlyBillId = null;
+  $("#monthlyBillForm").classList.add("hidden");
+  $("#monthlyBillForm").reset();
+  if (canEditMonthlyBillBalance(state.activeMonthlyBillBalance)) {
+    $("#addMonthlyBillButton").classList.remove("hidden");
+  }
+}
+
+async function saveMonthlyBill(event) {
+  event.preventDefault();
+  const balanceKey = state.activeMonthlyBillBalance;
+  if (!canEditMonthlyBillBalance(balanceKey)) {
+    showToast("Kamu hanya dapat mengubah tagihan milikmu sendiri.", "error");
+    return;
+  }
+
+  const name = $("#monthlyBillName").value.trim();
+  const amount = parseNumber($("#monthlyBillAmount").value);
+  const subscriptionDay = Number($("#monthlyBillSubscriptionDay").value);
+  if (!name || amount <= 0 || !Number.isInteger(subscriptionDay) || subscriptionDay < 1 || subscriptionDay > 31) {
+    showToast("Lengkapi keterangan, nominal, dan tanggal berlangganan 1–31.", "error");
+    return;
+  }
+
+  const button = $("#saveMonthlyBillButton");
+  const editing = state.editingMonthlyBillId !== null;
+  setButtonBusy(button, true, "Menyimpan…");
+  const payload = { name, amount, subscription_day: subscriptionDay };
+  const { error } = editing
+    ? await supabase
+      .from("monthly_bills")
+      .update(payload)
+      .eq("id", state.editingMonthlyBillId)
+      .eq("household_id", state.household.id)
+    : await supabase.from("monthly_bills").insert({
+      ...payload,
+      household_id: state.household.id,
+      owner_user_id: state.user.id,
+      balance_key: balanceKey,
+    });
+
+  if (error) {
+    showToast(error.message, "error");
+  } else {
+    closeMonthlyBillForm();
+    showToast(editing ? "Tagihan berhasil diperbarui." : "Tagihan bulanan berhasil ditambahkan.");
+    await reloadFinanceAndBillsDialog();
+  }
+  setButtonBusy(button, false);
+}
+
+async function deleteMonthlyBill(billId) {
+  if (!canEditMonthlyBillBalance(state.activeMonthlyBillBalance)) return;
+  const bill = state.monthlyBills.find((item) => String(item.id) === String(billId));
+  if (!bill || !confirm(`Hapus tagihan ${bill.name}?`)) return;
+  const { error } = await supabase
+    .from("monthly_bills")
+    .delete()
+    .eq("id", billId)
+    .eq("household_id", state.household.id);
+  if (error) showToast(error.message, "error");
+  else {
+    showToast("Tagihan bulanan berhasil dihapus.");
+    await reloadFinanceAndBillsDialog();
+  }
+}
+
+async function toggleMonthlyBillPayment(billId, paid) {
+  if (!canEditMonthlyBillBalance(state.activeMonthlyBillBalance)) return;
+  const bill = state.monthlyBills.find((item) => String(item.id) === String(billId));
+  if (!bill || bill.balance_key !== state.activeMonthlyBillBalance) return;
+
+  const query = supabase.from("monthly_bill_payments");
+  const { error } = paid
+    ? await query.insert({
+      monthly_bill_id: bill.id,
+      household_id: state.household.id,
+      billing_month: currentBillingMonthKey(),
+      marked_by: state.user.id,
+    })
+    : await query
+      .delete()
+      .eq("monthly_bill_id", bill.id)
+      .eq("billing_month", currentBillingMonthKey())
+      .eq("household_id", state.household.id);
+
+  if (error) {
+    showToast(error.message, "error");
+    renderMonthlyBills();
+  } else {
+    showToast(paid ? "Tagihan ditandai sudah dibayar." : "Tagihan kembali ditandai belum dibayar.");
+    await reloadFinanceAndBillsDialog();
+  }
+}
+
+async function reloadFinanceAndBillsDialog() {
+  await loadFinanceData();
+  if ($("#monthlyBillsDialog").open) renderMonthlyBills();
+}
+
+function closeMonthlyBillsFromBackdrop(event) {
+  const dialog = $("#monthlyBillsDialog");
+  const content = dialog.querySelector(".monthly-bills-content");
+  const bounds = content.getBoundingClientRect();
+  const tappedOutside = event.clientX < bounds.left
+    || event.clientX > bounds.right
+    || event.clientY < bounds.top
+    || event.clientY > bounds.bottom;
+  if (tappedOutside) dialog.close();
+}
+
 function editAsset(id) {
   const asset = state.assets.find((item) => String(item.id) === String(id));
   if (!asset) {
@@ -1470,6 +1774,13 @@ function formatDate(date, includeYear = false) {
     day: "numeric",
     month: "short",
     ...(includeYear ? { year: "numeric" } : {}),
+  });
+}
+
+function formatBillingMonth(date) {
+  return new Date(`${String(date).slice(0, 10)}T00:00:00`).toLocaleDateString("id-ID", {
+    month: "long",
+    year: "numeric",
   });
 }
 

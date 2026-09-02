@@ -15,7 +15,9 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 - Penyesuaian saldo dapat dilakukan dengan mengetik saldo akhir atau nominal penambahan/pengurangan, disertai alasan dan jejak perubahan.
 - Pencatatan emas, tanah, perhiasan, kendaraan, properti, dan aset lainnya.
 - Dashboard total kekayaan, saldo tersedia, nilai aset, dan arus bulan berjalan.
-- Countdown gajian tanggal 10 dan rekomendasi pengeluaran harian untuk saldo suami serta istri.
+- Countdown gajian tanggal 10 dan rekomendasi harian setelah menyisihkan tagihan yang belum dibayar.
+- Tagihan bulanan dengan nominal, tanggal berlangganan, serta checklist pembayaran yang otomatis dimulai ulang setiap bulan.
+- Setiap akun hanya dapat mengelola tagihan saldonya sendiri dan tetap dapat melihat tagihan pasangan.
 - Riwayat otomatis membuka bulan berjalan dan dapat difilter berdasarkan jenis, bulan, serta pencatat (suami/istri).
 - Baris riwayat dapat diketuk untuk melihat detail tanpa masuk ke mode edit; ketuk area di luar kotak untuk menutup detail.
 - Donut chart kategori pada mobile mengikuti filter Riwayat yang aktif, dengan warna teks legenda yang sama seperti segmen chart.
@@ -33,6 +35,7 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 | `config.js` | URL dan publishable/anon key Supabase |
 | `supabase-schema.sql` | Schema lengkap: tabel, functions, anti-minus, audit, grants, dan RLS |
 | `supabase-migration-transfers-logs.sql` | Upgrade instalasi lama untuk transfer, penyesuaian, anti-minus, dan Logs |
+| `supabase-migration-monthly-bills.sql` | Upgrade instalasi lama untuk tagihan bulanan, checklist, audit, dan izin pemilik |
 | `vercel.json` | Security headers untuk Vercel |
 | `favicon.svg` | Ikon aplikasi |
 
@@ -51,6 +54,8 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
    - `balance_transfers`
    - `balance_adjustments`
    - `audit_logs`
+   - `monthly_bills`
+   - `monthly_bill_payments`
 
 SQL tersebut juga mengaktifkan RLS. Jangan menonaktifkan RLS karena itulah
 lapisan yang membatasi data setiap keluarga.
@@ -61,6 +66,10 @@ Untuk database dari versi lama, jalankan isi
 `supabase-migration-transfers-logs.sql` melalui SQL Editor sebelum mengunggah
 frontend versi ini. Jika migration tersebut sudah pernah berhasil dijalankan,
 tidak perlu menjalankannya lagi.
+
+Setelah itu jalankan `supabase-migration-monthly-bills.sql`. Migration ini
+wajib untuk versi yang memiliki menu tagihan bulanan. Checklist pembayaran
+hanya menjadi penanda; pembayaran tetap dicatat manual melalui Outcome.
 
 ## 2. Menyambungkan frontend ke Supabase
 
