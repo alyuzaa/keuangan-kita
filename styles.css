@@ -180,6 +180,8 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .asset-snapshot { grid-column: 2; grid-row: 2 / span 2; }
 .recent-row { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid #ecebe5; }
 .recent-row:first-child { padding-top: 0; border-top: 0; }
+.recent-row.viewable-row { margin-inline: -8px; padding-inline: 8px; }
+.recent-row.viewable-row:first-child { margin-top: -8px; padding-top: 8px; }
 .transaction-icon { width: 38px; height: 38px; }
 .recent-row > div:nth-child(2), .asset-preview > div:nth-child(2), .transaction-name > div:last-child { min-width: 0; display: flex; flex-direction: column; }
 .recent-row strong, .transaction-name strong { font-size: 11px; }

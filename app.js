@@ -660,6 +660,17 @@ function renderDashboard() {
     ? recent.map(transactionRowHtml).join("")
     : emptyStateHtml("⇄", "Belum ada transaksi", "Catat income pertama untuk mulai melihat kondisi keuangan keluarga.", "income");
 
+  $$('[data-view-recent-transaction]').forEach((row) => {
+    const openRecent = () => openRecentTransaction(row.dataset.viewRecentTransaction);
+    row.addEventListener("click", openRecent);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openRecent();
+      }
+    });
+  });
+
   const assetPreview = state.assets.slice(0, 3);
   $("#assetSnapshot").innerHTML = assetPreview.length
     ? assetPreview.map((asset) => `
@@ -928,12 +939,32 @@ function logActionLabel(action) {
 
 function transactionRowHtml(item) {
   return `
-    <div class="recent-row">
+    <div class="recent-row viewable-row" data-view-recent-transaction="${item.id}" role="button" tabindex="0" aria-label="Buka detail ${escapeHtml(item.category)} di Riwayat">
       <div class="transaction-icon ${item.type}">${item.type === "income" ? "↙" : "↗"}</div>
       ${transactionDetailsHtml(item)}
       <b class="${item.type === "income" ? "positive" : "negative"}">${item.type === "income" ? "+" : "−"}${formatRupiah(item.amount)}</b>
     </div>
   `;
+}
+
+function openRecentTransaction(id) {
+  const transaction = state.transactions.find((item) => String(item.id) === String(id));
+  if (!transaction) {
+    showToast("Transaksi tidak ditemukan.", "error");
+    return;
+  }
+
+  state.transactionFilter = "all";
+  state.transactionMemberFilter = "all";
+  state.transactionMonth = String(transaction.date).slice(0, 7);
+  $$(".filter-tabs button").forEach((button) => button.classList.toggle("active", button.dataset.filter === "all"));
+  $$(".member-filter-tabs button").forEach((button) => button.classList.toggle("active", button.dataset.memberFilter === "all"));
+  renderTransactionMonthOptions();
+  renderTransactions();
+  renderHistoryChart();
+  switchView("transactions");
+  window.scrollTo({ top: 0, behavior: "auto" });
+  openTransactionDetail(transaction.id);
 }
 
 function transactionMember(item) {
