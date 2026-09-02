@@ -20,7 +20,7 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 - Setiap akun hanya dapat mengelola tagihan saldonya sendiri dan tetap dapat melihat tagihan pasangan.
 - Riwayat otomatis membuka bulan berjalan dan dapat difilter berdasarkan jenis, bulan, serta pencatat (suami/istri).
 - Baris riwayat dapat diketuk untuk melihat detail tanpa masuk ke mode edit; ketuk area di luar kotak untuk menutup detail.
-- Item Riwayat terbaru di Beranda dapat diketuk untuk berpindah ke tab Riwayat dan langsung membuka detail transaksi.
+- Item Riwayat terbaru di Beranda dapat diketuk untuk membuka detail transaksi tanpa meninggalkan Beranda.
 - Donut chart kategori pada mobile mengikuti filter Riwayat yang aktif, dengan warna teks legenda yang sama seperti segmen chart.
 - Edit/hapus transaksi dan aset, serta tab Logs yang tidak dapat diubah.
 - Row Level Security (RLS): pengguna tidak bisa membaca household lain.

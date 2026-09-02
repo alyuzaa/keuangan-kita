@@ -939,7 +939,7 @@ function logActionLabel(action) {
 
 function transactionRowHtml(item) {
   return `
-    <div class="recent-row viewable-row" data-view-recent-transaction="${item.id}" role="button" tabindex="0" aria-label="Buka detail ${escapeHtml(item.category)} di Riwayat">
+    <div class="recent-row viewable-row" data-view-recent-transaction="${item.id}" role="button" tabindex="0" aria-label="Buka detail transaksi ${escapeHtml(item.category)}">
       <div class="transaction-icon ${item.type}">${item.type === "income" ? "↙" : "↗"}</div>
       ${transactionDetailsHtml(item)}
       <b class="${item.type === "income" ? "positive" : "negative"}">${item.type === "income" ? "+" : "−"}${formatRupiah(item.amount)}</b>
@@ -953,17 +953,6 @@ function openRecentTransaction(id) {
     showToast("Transaksi tidak ditemukan.", "error");
     return;
   }
-
-  state.transactionFilter = "all";
-  state.transactionMemberFilter = "all";
-  state.transactionMonth = String(transaction.date).slice(0, 7);
-  $$(".filter-tabs button").forEach((button) => button.classList.toggle("active", button.dataset.filter === "all"));
-  $$(".member-filter-tabs button").forEach((button) => button.classList.toggle("active", button.dataset.memberFilter === "all"));
-  renderTransactionMonthOptions();
-  renderTransactions();
-  renderHistoryChart();
-  switchView("transactions");
-  window.scrollTo({ top: 0, behavior: "auto" });
   openTransactionDetail(transaction.id);
 }
 
