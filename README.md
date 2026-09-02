@@ -17,6 +17,7 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 - Dashboard total kekayaan, saldo tersedia, nilai aset, dan arus bulan berjalan.
 - Countdown gajian tanggal 10 dan rekomendasi harian setelah menyisihkan tagihan yang belum dibayar.
 - Tagihan bulanan dengan nominal, tanggal berlangganan, serta checklist pembayaran yang otomatis dimulai ulang setiap bulan.
+- Form tambah/edit tagihan tampil sebagai dialog tersendiri seperti form Income/Outcome dan tidak menempel di bagian bawah layar.
 - Setiap akun hanya dapat mengelola tagihan saldonya sendiri dan tetap dapat melihat tagihan pasangan.
 - Riwayat otomatis membuka bulan berjalan dan dapat difilter berdasarkan jenis, bulan, serta pencatat (suami/istri).
 - Baris riwayat dapat diketuk untuk melihat detail tanpa masuk ke mode edit; ketuk area di luar kotak untuk menutup detail.

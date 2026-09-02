@@ -246,6 +246,7 @@ function bindEvents() {
   $("#adjustmentDialog .modal-close").addEventListener("click", () => $("#adjustmentDialog").close());
   $("#monthlyBillsDialog .modal-close").addEventListener("click", () => $("#monthlyBillsDialog").close());
   $("#monthlyBillsDialog").addEventListener("click", closeMonthlyBillsFromBackdrop);
+  $("#monthlyBillFormDialog .modal-close").addEventListener("click", closeMonthlyBillForm);
   $("#transactionForm").addEventListener("submit", saveTransaction);
   $("#assetForm").addEventListener("submit", saveAsset);
   $("#passwordForm").addEventListener("submit", saveNewPassword);
@@ -254,7 +255,6 @@ function bindEvents() {
   $("#adjustmentForm").addEventListener("submit", saveAdjustment);
   $("#monthlyBillForm").addEventListener("submit", saveMonthlyBill);
   $("#addMonthlyBillButton").addEventListener("click", () => openMonthlyBillForm());
-  $("#cancelMonthlyBillButton").addEventListener("click", closeMonthlyBillForm);
   $$(".modal").forEach((dialog) => dialog.addEventListener("close", unlockPageScroll));
 
   $$(".filter-tabs button").forEach((button) => {
@@ -1472,18 +1472,14 @@ function openMonthlyBillForm(billId = null) {
     $("#monthlyBillSubscriptionDay").value = String(bill.subscription_day);
   }
 
-  $("#monthlyBillForm").classList.remove("hidden");
-  $("#addMonthlyBillButton").classList.add("hidden");
-  $("#monthlyBillName").focus();
+  openModal($("#monthlyBillFormDialog"));
 }
 
 function closeMonthlyBillForm() {
   state.editingMonthlyBillId = null;
-  $("#monthlyBillForm").classList.add("hidden");
+  if ($("#monthlyBillFormDialog").open) $("#monthlyBillFormDialog").close();
   $("#monthlyBillForm").reset();
-  if (canEditMonthlyBillBalance(state.activeMonthlyBillBalance)) {
-    $("#addMonthlyBillButton").classList.remove("hidden");
-  }
+  clearMonthlyBillsError();
 }
 
 async function saveMonthlyBill(event) {
@@ -1591,9 +1587,10 @@ function closeMonthlyBillsFromBackdrop(event) {
 }
 
 function clearMonthlyBillsError() {
-  const element = $("#monthlyBillsError");
-  element.textContent = "";
-  element.classList.add("hidden");
+  [$("#monthlyBillsError"), $("#monthlyBillFormError")].forEach((element) => {
+    element.textContent = "";
+    element.classList.add("hidden");
+  });
 }
 
 function showMonthlyBillsError(error, fallback) {
@@ -1603,7 +1600,7 @@ function showMonthlyBillsError(error, fallback) {
     .join(" · ");
   const code = error?.code ? ` [${error.code}]` : "";
   const message = `${fallback}${code}${details ? ` ${details}` : ""}`;
-  const element = $("#monthlyBillsError");
+  const element = $("#monthlyBillFormDialog").open ? $("#monthlyBillFormError") : $("#monthlyBillsError");
   element.textContent = message;
   element.classList.remove("hidden");
   showToast(message, "error");
