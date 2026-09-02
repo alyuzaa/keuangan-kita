@@ -827,6 +827,8 @@ grant execute on function public.adjust_household_balance(text, bigint, text) to
 -- Jalankan setelah supabase-migration-transfers-logs.sql.
 -- ============================================================
 
+begin;
+
 create table if not exists public.monthly_bills (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references public.households(id) on delete cascade,
@@ -921,8 +923,23 @@ as $$
   );
 $$;
 
-alter table public.audit_logs
-  drop constraint if exists audit_logs_entity_type_check;
+-- Nama constraint dapat berbeda pada database yang pernah dimigrasikan.
+-- Hapus seluruh CHECK khusus entity_type sebelum memasang versi terbaru.
+do $$
+declare
+  constraint_item record;
+begin
+  for constraint_item in
+    select constraint_name.conname
+    from pg_catalog.pg_constraint as constraint_name
+    where constraint_name.conrelid = 'public.audit_logs'::regclass
+      and constraint_name.contype = 'c'
+      and pg_catalog.pg_get_constraintdef(constraint_name.oid) ilike '%entity_type%'
+  loop
+    execute format('alter table public.audit_logs drop constraint %I', constraint_item.conname);
+  end loop;
+end;
+$$;
 
 alter table public.audit_logs
   add constraint audit_logs_entity_type_check
@@ -938,60 +955,85 @@ declare
   record_household_id uuid;
   record_user_id uuid;
   record_action text;
-  record_entity_type text;
   record_entity_id uuid;
   record_summary text;
   record_details jsonb;
   bill_name text;
 begin
   record_household_id := case when tg_op = 'DELETE' then old.household_id else new.household_id end;
-  record_user_id := coalesce(
-    auth.uid(),
-    case
-      when tg_table_name = 'monthly_bills' and tg_op = 'DELETE' then old.owner_user_id
-      when tg_table_name = 'monthly_bills' then new.owner_user_id
-      when tg_op = 'DELETE' then old.marked_by
-      else new.marked_by
-    end
+  record_user_id := coalesce(auth.uid(), case when tg_op = 'DELETE' then old.owner_user_id else new.owner_user_id end);
+  record_entity_id := case when tg_op = 'DELETE' then old.id else new.id end;
+  record_action := case when tg_op = 'INSERT' then 'create' else lower(tg_op) end;
+  bill_name := case when tg_op = 'DELETE' then old.name else new.name end;
+  record_summary := 'Tagihan ' || bill_name ||
+    case tg_op when 'INSERT' then ' ditambahkan' when 'UPDATE' then ' diubah' else ' dihapus' end;
+  record_details := jsonb_build_object(
+    'before', case when tg_op in ('UPDATE', 'DELETE') then to_jsonb(old) else null end,
+    'after', case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) else null end
   );
 
-  if tg_table_name = 'monthly_bills' then
-    record_entity_type := 'monthly_bill';
-    record_entity_id := case when tg_op = 'DELETE' then old.id else new.id end;
-    record_action := case when tg_op = 'INSERT' then 'create' else lower(tg_op) end;
-    bill_name := case when tg_op = 'DELETE' then old.name else new.name end;
-    record_summary := 'Tagihan ' || bill_name ||
-      case tg_op when 'INSERT' then ' ditambahkan' when 'UPDATE' then ' diubah' else ' dihapus' end;
-    record_details := jsonb_build_object(
-      'before', case when tg_op in ('UPDATE', 'DELETE') then to_jsonb(old) else null end,
-      'after', case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) else null end
+  -- Audit tidak boleh membatalkan penyimpanan tagihan utama.
+  begin
+    insert into public.audit_logs (
+      household_id, user_id, action, entity_type, entity_id, summary, details
+    ) values (
+      record_household_id, record_user_id, record_action, 'monthly_bill',
+      record_entity_id, left(record_summary, 180), record_details
     );
-  else
-    record_entity_type := 'bill_payment';
-    record_entity_id := case when tg_op = 'DELETE' then old.monthly_bill_id else new.monthly_bill_id end;
-    record_action := 'update';
+  exception when others then
+    raise warning 'Audit tagihan bulanan gagal: %', sqlerrm;
+  end;
 
-    select bill.name
-    into bill_name
-    from public.monthly_bills as bill
-    where bill.id = record_entity_id;
-
-    bill_name := coalesce(bill_name, 'Bulanan');
-    record_summary := 'Tagihan ' || bill_name ||
-      case when tg_op = 'INSERT' then ' ditandai sudah dibayar' else ' ditandai belum dibayar' end;
-    record_details := jsonb_build_object(
-      'bill_name', bill_name,
-      'before', case when tg_op = 'DELETE' then to_jsonb(old) else null end,
-      'after', case when tg_op = 'INSERT' then to_jsonb(new) else null end
-    );
+  if tg_op = 'DELETE' then
+    return old;
   end if;
+  return new;
+end;
+$$;
 
-  insert into public.audit_logs (
-    household_id, user_id, action, entity_type, entity_id, summary, details
-  ) values (
-    record_household_id, record_user_id, record_action, record_entity_type,
-    record_entity_id, left(record_summary, 180), record_details
+create or replace function public.write_monthly_bill_payment_audit_log()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  record_household_id uuid;
+  record_user_id uuid;
+  record_entity_id uuid;
+  record_summary text;
+  record_details jsonb;
+  bill_name text;
+begin
+  record_household_id := case when tg_op = 'DELETE' then old.household_id else new.household_id end;
+  record_user_id := coalesce(auth.uid(), case when tg_op = 'DELETE' then old.marked_by else new.marked_by end);
+  record_entity_id := case when tg_op = 'DELETE' then old.monthly_bill_id else new.monthly_bill_id end;
+
+  select bill.name
+  into bill_name
+  from public.monthly_bills as bill
+  where bill.id = record_entity_id;
+
+  bill_name := coalesce(bill_name, 'Bulanan');
+  record_summary := 'Tagihan ' || bill_name ||
+    case when tg_op = 'INSERT' then ' ditandai sudah dibayar' else ' ditandai belum dibayar' end;
+  record_details := jsonb_build_object(
+    'bill_name', bill_name,
+    'before', case when tg_op = 'DELETE' then to_jsonb(old) else null end,
+    'after', case when tg_op = 'INSERT' then to_jsonb(new) else null end
   );
+
+  -- Sama seperti tagihan, kegagalan audit tidak boleh mengubah status checklist.
+  begin
+    insert into public.audit_logs (
+      household_id, user_id, action, entity_type, entity_id, summary, details
+    ) values (
+      record_household_id, record_user_id, 'update', 'bill_payment',
+      record_entity_id, left(record_summary, 180), record_details
+    );
+  exception when others then
+    raise warning 'Audit status tagihan gagal: %', sqlerrm;
+  end;
 
   if tg_op = 'DELETE' then
     return old;
@@ -1008,7 +1050,7 @@ for each row execute function public.write_monthly_bill_audit_log();
 drop trigger if exists audit_monthly_bill_payments_trigger on public.monthly_bill_payments;
 create trigger audit_monthly_bill_payments_trigger
 after insert or delete on public.monthly_bill_payments
-for each row execute function public.write_monthly_bill_audit_log();
+for each row execute function public.write_monthly_bill_payment_audit_log();
 
 alter table public.monthly_bills enable row level security;
 alter table public.monthly_bill_payments enable row level security;
@@ -1091,6 +1133,12 @@ revoke execute on function public.set_monthly_bill_updated_at() from public, ano
 revoke execute on function public.can_manage_household_balance(uuid, text) from public, anon;
 revoke execute on function public.can_manage_monthly_bill(uuid, uuid) from public, anon;
 revoke execute on function public.write_monthly_bill_audit_log() from public, anon, authenticated;
+revoke execute on function public.write_monthly_bill_payment_audit_log() from public, anon, authenticated;
 
 grant execute on function public.can_manage_household_balance(uuid, text) to authenticated;
 grant execute on function public.can_manage_monthly_bill(uuid, uuid) to authenticated;
+
+commit;
+
+-- Minta PostgREST/Supabase membaca ulang tabel, kolom, function, dan policy.
+notify pgrst, 'reload schema';

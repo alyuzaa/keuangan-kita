@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Pencatatan keuangan pribadi untuk suami dan istri." />
     <meta name="theme-color" content="#173f33" />
-    <meta name="app-version" content="14" />
+    <meta name="app-version" content="15" />
     <title>Keuangan Kita</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=14" />
+    <link rel="stylesheet" href="./styles.css?v=15" />
   </head>
   <body>
     <div id="configError" class="config-error hidden">
@@ -307,6 +307,7 @@
           <div><span>Belum dibayar bulan ini</span><strong id="monthlyBillsUnpaidTotal">Rp0</strong></div>
           <button id="addMonthlyBillButton" class="button primary" type="button">＋ Tambah</button>
         </div>
+        <p id="monthlyBillsError" class="monthly-bills-error hidden" role="alert"></p>
         <form id="monthlyBillForm" class="monthly-bill-form hidden">
           <div class="monthly-bill-form-heading"><strong id="monthlyBillFormTitle">Tambah tagihan</strong><button id="cancelMonthlyBillButton" type="button">Batal</button></div>
           <label><span>Keterangan</span><input id="monthlyBillName" type="text" maxlength="80" placeholder="Contoh: Paket data" required /></label>
@@ -362,6 +363,6 @@
     </dialog>
 
     <div id="toastContainer" class="toast-container" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=14"></script>
+    <script type="module" src="./app.js?v=15"></script>
   </body>
 </html>

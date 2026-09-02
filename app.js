@@ -637,7 +637,7 @@ function renderDashboard() {
       <div class="allocation-icon ${item.color}">${item.icon}</div>
       <div class="allocation-data">
         <div><span>${item.label}</span><strong>${formatRupiah(item.value)}</strong></div>
-        <div class="progress"><i style="width:${Math.max(item.value, 0) / max * 100}%"></i></div>
+        <progress class="balance-progress" max="${max}" value="${Math.max(item.value, 0)}" aria-label="Perbandingan saldo ${item.label}"></progress>
         <div class="daily-spending"><span>Rekomendasi pengeluaran per hari</span><strong>${formatRupiah(dailyRecommendation)}</strong></div>
         <small class="monthly-bill-summary${unpaidTotal > Number(item.value) ? " warning" : ""}">${billSummary}</small>
       </div>
@@ -1343,6 +1343,7 @@ function openMonthlyBillsDialog(balanceKey) {
   if (!['husband', 'wife'].includes(balanceKey)) return;
   state.activeMonthlyBillBalance = balanceKey;
   closeMonthlyBillForm();
+  clearMonthlyBillsError();
 
   const ownBalance = canEditMonthlyBillBalance(balanceKey);
   $("#monthlyBillsTitle").textContent = sourceLabel(balanceKey);
@@ -1436,6 +1437,7 @@ function endOfLocalDay(date) {
 
 function openMonthlyBillForm(billId = null) {
   if (!canEditMonthlyBillBalance(state.activeMonthlyBillBalance)) return;
+  clearMonthlyBillsError();
   state.editingMonthlyBillId = billId;
   $("#monthlyBillForm").reset();
   $("#monthlyBillSubscriptionDay").value = String(new Date().getDate());
@@ -1466,6 +1468,7 @@ function closeMonthlyBillForm() {
 
 async function saveMonthlyBill(event) {
   event.preventDefault();
+  clearMonthlyBillsError();
   const balanceKey = state.activeMonthlyBillBalance;
   if (!canEditMonthlyBillBalance(balanceKey)) {
     showToast("Kamu hanya dapat mengubah tagihan milikmu sendiri.", "error");
@@ -1498,7 +1501,7 @@ async function saveMonthlyBill(event) {
     });
 
   if (error) {
-    showToast(error.message, "error");
+    showMonthlyBillsError(error, "Tagihan belum dapat disimpan.");
   } else {
     closeMonthlyBillForm();
     showToast(editing ? "Tagihan berhasil diperbarui." : "Tagihan bulanan berhasil ditambahkan.");
@@ -1516,7 +1519,7 @@ async function deleteMonthlyBill(billId) {
     .delete()
     .eq("id", billId)
     .eq("household_id", state.household.id);
-  if (error) showToast(error.message, "error");
+  if (error) showMonthlyBillsError(error, "Tagihan belum dapat dihapus.");
   else {
     showToast("Tagihan bulanan berhasil dihapus.");
     await reloadFinanceAndBillsDialog();
@@ -1543,7 +1546,7 @@ async function toggleMonthlyBillPayment(billId, paid) {
       .eq("household_id", state.household.id);
 
   if (error) {
-    showToast(error.message, "error");
+    showMonthlyBillsError(error, "Status pembayaran belum dapat diperbarui.");
     renderMonthlyBills();
   } else {
     showToast(paid ? "Tagihan ditandai sudah dibayar." : "Tagihan kembali ditandai belum dibayar.");
@@ -1565,6 +1568,25 @@ function closeMonthlyBillsFromBackdrop(event) {
     || event.clientY < bounds.top
     || event.clientY > bounds.bottom;
   if (tappedOutside) dialog.close();
+}
+
+function clearMonthlyBillsError() {
+  const element = $("#monthlyBillsError");
+  element.textContent = "";
+  element.classList.add("hidden");
+}
+
+function showMonthlyBillsError(error, fallback) {
+  const details = [error?.message, error?.details, error?.hint]
+    .filter(Boolean)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .join(" · ");
+  const code = error?.code ? ` [${error.code}]` : "";
+  const message = `${fallback}${code}${details ? ` ${details}` : ""}`;
+  const element = $("#monthlyBillsError");
+  element.textContent = message;
+  element.classList.remove("hidden");
+  showToast(message, "error");
 }
 
 function editAsset(id) {
@@ -1618,7 +1640,6 @@ function updateAssetCalculation() {
 function openModal(dialog) {
   if (!document.body.classList.contains("modal-open")) {
     state.lockedScrollY = window.scrollY;
-    document.body.style.top = `-${state.lockedScrollY}px`;
     document.body.classList.add("modal-open");
   }
   dialog.showModal();
@@ -1627,7 +1648,6 @@ function openModal(dialog) {
 function unlockPageScroll() {
   if ($$(".modal[open]").length) return;
   document.body.classList.remove("modal-open");
-  document.body.style.top = "";
   window.scrollTo(0, state.lockedScrollY);
 }
 

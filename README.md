@@ -70,6 +70,8 @@ tidak perlu menjalankannya lagi.
 Setelah itu jalankan `supabase-migration-monthly-bills.sql`. Migration ini
 wajib untuk versi yang memiliki menu tagihan bulanan. Checklist pembayaran
 hanya menjadi penanda; pembayaran tetap dicatat manual melalui Outcome.
+File migration versi terbaru aman dijalankan ulang untuk memperbaiki instalasi
+tagihan yang sempat berhenti di tengah atau menghasilkan respons HTTP 400.
 
 ## 2. Menyambungkan frontend ke Supabase
 
