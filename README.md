@@ -49,7 +49,6 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 | `supabase-migration-family-members.sql` | Upgrade anggota dinamis, role keluarga, saldo pribadi, izin room master, dan saldo defisit |
 | `supabase-migration-important-logs.sql` | Membatasi audit baru ke perubahan saldo penting dan menghentikan log tagihan/aset |
 | `supabase-migration-dynamic-savings-settings.sql` | Menambah pos tabungan dinamis, arsip aman, nama keluarga, dan pengaturan gajian |
-| `migrate-existing-usernames.mjs` | Migrasi satu kali akun email lama menjadi username tanpa mengganti UUID pengguna |
 | `vercel.json` | Security headers untuk Vercel |
 | `favicon.svg` | Ikon aplikasi |
 
@@ -153,38 +152,10 @@ alamat email sungguhan.
 Pemulihan password dilakukan manual oleh admin melalui Supabase. Jangan
 memasukkan `service_role` key ke `config.js` atau kode frontend.
 
-### Migrasi dua akun email lama
-
-Migrasi ini mempertahankan UUID `auth.users.id`, sehingga transaksi, saldo,
-role, room, dan data lama tidak berubah. Jangan menghapus dan membuat ulang
-akun lama.
-
-1. Pastikan kedua akun lama sudah keluar dari aplikasi.
-2. Ambil **service_role key** dari pengaturan API Supabase. Kunci ini hanya
-   dipakai sementara di terminal dan tidak boleh dimasukkan ke GitHub.
-3. Jalankan pratinjau dari folder proyek (contoh PowerShell). Belum ada data
-   yang diubah pada langkah ini:
-
-```powershell
-$env:SUPABASE_URL="https://PROJECT-ID.supabase.co"
-$env:SUPABASE_SERVICE_ROLE_KEY="SERVICE-ROLE-KEY"
-node .\migrate-existing-usernames.mjs "email-lama-1@gmail.com=alyuza" "email-lama-2@gmail.com=refirifkiya"
-```
-
-4. Periksa email, username, dan UUID yang ditampilkan. Jika sudah benar,
-   jalankan perintah yang sama dengan tambahan `--apply`:
-
-```powershell
-node .\migrate-existing-usernames.mjs --apply "email-lama-1@gmail.com=alyuza" "email-lama-2@gmail.com=refirifkiya"
-Remove-Item Env:\SUPABASE_SERVICE_ROLE_KEY
-```
-
-5. Setelah muncul pesan berhasil, login kembali memakai `alyuza` atau
-   `refirifkiya` dengan password lama. Script aman dijalankan ulang untuk
-   menyelesaikan pembaruan tabel profil jika koneksi sempat terputus.
-
-Frontend tetap menerima email pada halaman Masuk selama masa transisi. Form
-Daftar hanya menerima username.
+Kolom Masuk menerima email maupun username. Dua akun yang sudah terdaftar
+sebelum versi ini tetap masuk menggunakan email dan password lama, sehingga
+tidak membutuhkan migrasi serta seluruh UUID dan data lama tetap utuh. Akun
+yang dibuat mulai versi ini mendaftar dan masuk menggunakan username.
 
 ## 4. Mencoba secara lokal
 
