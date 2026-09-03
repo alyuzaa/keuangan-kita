@@ -361,11 +361,9 @@ function setAuthMode(mode) {
   $("#registerTab").classList.toggle("active", mode === "register");
   $("#authSubmit").textContent = mode === "login" ? "Masuk" : "Buat akun";
   $("#authIdentifierLabel").textContent = mode === "login" ? "Username atau email" : "Username";
-  $("#authIdentifier").placeholder = mode === "login" ? "Masukkan username" : "Contoh: alyuza";
+  $("#authIdentifier").placeholder = mode === "login" ? "Masukkan username" : "Contoh: keluargakita";
   $("#authIdentifier").maxLength = mode === "login" ? 320 : 30;
   $("#authIdentifierHint").textContent = mode === "login"
-    ? "Email lama tetap dapat dipakai selama proses migrasi."
-    : "Gunakan 3–30 huruf kecil, angka, titik, garis bawah, atau tanda hubung.";
   $("#authPassword").autocomplete = mode === "login" ? "current-password" : "new-password";
 }
 
