@@ -80,6 +80,7 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 258px minmax(0, 1fr); }
 .sidebar { position: sticky; top: 0; z-index: 30; height: 100vh; display: flex; flex-direction: column; padding: 26px 18px 18px; color: #eff4ea; background: #163f33; }
 .sidebar-brand { display: flex; align-items: center; gap: 12px; padding: 0 8px 34px; }
+.household-name-edit-button { flex: 0 0 auto; width: 27px; height: 27px; padding: 0; border: 1px solid rgba(255, 255, 255, .15); border-radius: 9px; color: #f1dea6; background: rgba(255, 255, 255, .07); font-size: 12px; }
 .sidebar-brand .brand-icon { color: #274b3f; background: #f0dda7; }
 .desktop-brand-copy { min-width: 0; display: flex; flex-direction: column; }
 .mobile-brand-copy { display: none; }
@@ -129,6 +130,7 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .wealth-card { min-height: 284px; overflow: hidden; position: relative; padding: 34px; color: #f8f4e8; border-color: var(--green); background: linear-gradient(135deg, #1b5140 0%, #143b31 70%); }
 .wealth-card::after { content: ""; position: absolute; width: 260px; height: 260px; right: -110px; top: -100px; border: 55px solid rgba(235, 218, 164, .08); border-radius: 50%; }
 .wealth-heading { display: flex; align-items: start; justify-content: space-between; position: relative; z-index: 1; }
+.wealth-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; position: relative; z-index: 2; }
 .wealth-heading span, .wealth-breakdown span { color: #b9c9c2; font-size: 12px; }
 .wealth-heading h2 { margin: 9px 0 0; font-family: Georgia, serif; font-size: clamp(34px, 5vw, 49px); font-weight: 500; letter-spacing: -.035em; }
 .wealth-adjust-button { position: relative; z-index: 2; min-height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 11px; border: 1px solid rgba(255, 255, 255, .18); border-radius: 999px; color: #f8edc9; background: rgba(255, 255, 255, .08); font-size: 9px; font-weight: 800; }
@@ -156,6 +158,14 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .payday-countdown span { font-size: 7px; }
 .payday-countdown strong { margin-top: 2px; color: #1f604b; font-size: 10px; white-space: nowrap; }
 .payday-countdown small { margin-top: 2px; color: #849087; font-size: 7px; white-space: nowrap; }
+.payday-controls { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.payday-settings-button { padding: 0; border: 0; color: #1f604b; background: transparent; font-size: 8px; font-weight: 800; text-decoration: underline; }
+.toggle-field { display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 11px; padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: #f8f9f4; }
+.toggle-field input { flex: 0 0 auto; width: 19px; height: 19px; margin: 1px 0 0; accent-color: var(--green); }
+.toggle-field > span { display: flex; flex-direction: column; gap: 3px; }
+.toggle-field b { color: var(--ink); font-size: 11px; }
+.toggle-field small { color: var(--muted); font-size: 9px; line-height: 1.45; }
+.disabled-field { opacity: .48; }
 .allocation-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 21px; }
 .allocation-item { min-width: 0; display: flex; gap: 12px; align-items: center; }
 .allocation-item-button { margin: -9px; padding: 9px; border-radius: 15px; cursor: pointer; transition: background .18s, box-shadow .18s; }
@@ -430,6 +440,10 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .member-management-actions button { height: 29px; padding: 0 9px; border: 1px solid #dce0d8; border-radius: 8px; color: #2a634f; background: #f7f8f3; font-size: 8px; font-weight: 750; }
 .member-management-actions button.remove { color: #a64b45; border-color: #ecd0cc; background: #fff5f3; }
 .members-note { margin: 14px 0 0; padding-top: 13px; border-top: 1px dashed #d8dad3; color: #89928c; font-size: 8px; line-height: 1.5; }
+.savings-content { max-height: min(760px, calc(100vh - 30px)); overflow-y: auto; }
+.savings-add-button { margin: 0 0 13px; }
+.savings-account-row .member-management-info small { margin-top: 4px; }
+.empty-state.compact { padding: 28px 12px; }
 .remove-member-form-grid { margin-top: 15px; }
 .balance-hint.warning { color: #994840; background: #fff0ed; }
 .balance-hint.warning::after { content: "Saldo harus Rp0 sebelum akses dapat dihapus."; display: block; margin-left: 10px; font-size: 8px; }
@@ -468,6 +482,7 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
     box-shadow: none;
   }
   .sidebar-brand { grid-area: brand; min-width: 0; padding: 0; }
+  .household-name-edit-button { width: 24px; height: 24px; }
   .sidebar-brand .brand-icon { display: none; }
   .desktop-brand-copy { display: none; }
   .mobile-brand-copy { min-width: 0; display: flex; flex-direction: column; }
@@ -514,6 +529,7 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
   .wealth-card { min-height: 0; padding: 23px 26px 20px; }
   .wealth-heading h2 { margin-top: 7px; font-size: 32px; }
   .wealth-heading { gap: 8px; }
+  .wealth-actions { gap: 5px; }
   .wealth-adjust-button { flex: 0 0 auto; min-height: 29px; padding: 0 9px; font-size: 8px; }
   .adjust-label-full { display: none; }
   .adjust-label-short { display: inline; }

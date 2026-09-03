@@ -17,6 +17,7 @@ const state = {
   auditLogs: [],
   monthlyBills: [],
   monthlyBillPayments: [],
+  savingsAccounts: [],
   authMode: "login",
   transactionMode: "income",
   transactionFilter: "all",
@@ -30,17 +31,14 @@ const state = {
   activeMonthlyBillMemberId: null,
   editingMemberRoleId: null,
   removingMemberId: null,
+  editingSavingsAccountId: null,
+  archivingSavingsAccountId: null,
   activeView: "dashboard",
   lockedScrollY: 0,
 };
 
 const incomeCategories = ["Gaji", "Bonus", "Usaha", "Investasi", "Hadiah", "Lainnya"];
 const outcomeCategories = ["Makan & minum", "Tagihan", "Transportasi", "Kesehatan", "Kecantikan", "Belanja", "Hiburan", "Rumah tangga", "Lainnya"];
-const sharedBalanceOptions = [
-  { key: "savings", label: "Tabungan bersama" },
-  { key: "wife_savings", label: "Tabungan istri" },
-  { key: "education", label: "Pendidikan" },
-];
 const chartColors = ["#bd5a58", "#d6a84d", "#3f806b", "#728e60", "#b97891", "#8069a8", "#d07c4f", "#68889c", "#8a918c"];
 const today = new Date().toISOString().slice(0, 10);
 
@@ -101,6 +99,7 @@ async function handleSession(session) {
     state.auditLogs = [];
     state.monthlyBills = [];
     state.monthlyBillPayments = [];
+    state.savingsAccounts = [];
     state.transactionMonth = currentMonthKey;
     state.logsMonth = currentMonthKey;
     showScreen("auth");
@@ -114,7 +113,7 @@ async function handleSession(session) {
 async function loadHousehold() {
   const { data, error } = await supabase
     .from("household_members")
-    .select("household_id, role, display_name, households!inner(id, name, invite_code, created_by)")
+    .select("household_id, role, display_name, households!inner(id, name, invite_code, created_by, payday_enabled, payday_day)")
     .eq("user_id", state.user.id)
     .maybeSingle();
 
@@ -145,7 +144,7 @@ async function loadHousehold() {
 async function loadFinanceData() {
   setBusy(true);
   const householdId = state.household.id;
-  const [transactionsResult, assetsResult, membersResult, transfersResult, adjustmentsResult, logsResult, billsResult, billPaymentsResult] = await Promise.all([
+  const [transactionsResult, assetsResult, membersResult, transfersResult, adjustmentsResult, logsResult, billsResult, billPaymentsResult, savingsResult] = await Promise.all([
     supabase
       .from("transactions")
       .select("*")
@@ -189,6 +188,12 @@ async function loadFinanceData() {
       .select("*")
       .eq("household_id", householdId)
       .eq("billing_month", currentBillingMonthKey()),
+    supabase
+      .from("savings_accounts")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true }),
   ]);
 
   const loadError = transactionsResult.error
@@ -198,7 +203,8 @@ async function loadFinanceData() {
     || adjustmentsResult.error
     || logsResult.error
     || billsResult.error
-    || billPaymentsResult.error;
+    || billPaymentsResult.error
+    || savingsResult.error;
   if (loadError) {
     showToast(loadError.message || "Data gagal dimuat.", "error");
   } else {
@@ -210,6 +216,7 @@ async function loadFinanceData() {
     state.auditLogs = logsResult.data ?? [];
     state.monthlyBills = billsResult.data ?? [];
     state.monthlyBillPayments = billPaymentsResult.data ?? [];
+    state.savingsAccounts = savingsResult.data ?? [];
     fillProfile();
     renderAll();
   }
@@ -226,6 +233,7 @@ function bindEvents() {
   $("#onboardingLogout").addEventListener("click", logout);
   $("#logoutButton").addEventListener("click", logout);
   $("#editUserNameButton").addEventListener("click", openUserNameDialog);
+  $("#editHouseholdNameButton").addEventListener("click", openHouseholdNameDialog);
   $("#manageMembersButton").addEventListener("click", openMembersDialog);
   $("#copyInviteCode").addEventListener("click", copyInviteCode);
 
@@ -237,6 +245,8 @@ function bindEvents() {
   $("#topOutcomeButton").addEventListener("click", () => openTransactionDialog("outcome"));
   $("#topTransferButton").addEventListener("click", openTransferDialog);
   $("#adjustBalanceButton").addEventListener("click", openAdjustmentDialog);
+  $("#manageSavingsButton").addEventListener("click", openSavingsDialog);
+  $("#paydaySettingsButton").addEventListener("click", openPaydaySettingsDialog);
   $("#viewIncomeButton").addEventListener("click", () => openTransactionDialog("income"));
   $("#viewOutcomeButton").addEventListener("click", () => openTransactionDialog("outcome"));
   $("#addAssetButton").addEventListener("click", () => openAssetDialog());
@@ -244,6 +254,11 @@ function bindEvents() {
   $("#transactionDialog .modal-close").addEventListener("click", () => $("#transactionDialog").close());
   $("#assetDialog .modal-close").addEventListener("click", () => $("#assetDialog").close());
   $("#userNameDialog .modal-close").addEventListener("click", () => $("#userNameDialog").close());
+  $("#householdNameDialog .modal-close").addEventListener("click", () => $("#householdNameDialog").close());
+  $("#paydaySettingsDialog .modal-close").addEventListener("click", () => $("#paydaySettingsDialog").close());
+  $("#savingsDialog .modal-close").addEventListener("click", () => $("#savingsDialog").close());
+  $("#savingsAccountFormDialog .modal-close").addEventListener("click", () => $("#savingsAccountFormDialog").close());
+  $("#archiveSavingsDialog .modal-close").addEventListener("click", () => $("#archiveSavingsDialog").close());
   $("#transactionDetailDialog .modal-close").addEventListener("click", () => $("#transactionDetailDialog").close());
   $("#transactionDetailDialog").addEventListener("click", closeTransactionDetailFromBackdrop);
   $("#transferDialog .modal-close").addEventListener("click", () => $("#transferDialog").close());
@@ -258,12 +273,17 @@ function bindEvents() {
   $("#assetForm").addEventListener("submit", saveAsset);
   $("#passwordForm").addEventListener("submit", saveNewPassword);
   $("#userNameForm").addEventListener("submit", saveUserName);
+  $("#householdNameForm").addEventListener("submit", saveHouseholdName);
+  $("#paydaySettingsForm").addEventListener("submit", savePaydaySettings);
+  $("#savingsAccountForm").addEventListener("submit", saveSavingsAccount);
+  $("#archiveSavingsForm").addEventListener("submit", archiveSavingsAccount);
   $("#transferForm").addEventListener("submit", saveTransfer);
   $("#adjustmentForm").addEventListener("submit", saveAdjustment);
   $("#monthlyBillForm").addEventListener("submit", saveMonthlyBill);
   $("#memberRoleForm").addEventListener("submit", saveMemberRole);
   $("#removeMemberForm").addEventListener("submit", removeMember);
   $("#addMonthlyBillButton").addEventListener("click", () => openMonthlyBillForm());
+  $("#addSavingsAccountButton").addEventListener("click", () => openSavingsAccountForm());
   $$(".modal").forEach((dialog) => dialog.addEventListener("close", unlockPageScroll));
 
   $$(".filter-tabs button").forEach((button) => {
@@ -287,9 +307,6 @@ function bindEvents() {
 
   [
     "#transactionAmount",
-    "#savingsAllocation",
-    "#wifeSavingsAllocation",
-    "#educationAllocation",
     "#assetPurchaseValue",
     "#assetCurrentValue",
     "#transferAmount",
@@ -326,8 +343,15 @@ function bindEvents() {
     event.target.value = formatNumberInput(event.target.value);
     updateAllocationStatus();
   });
+  $("#savingsAllocationFields").addEventListener("input", (event) => {
+    if (!event.target.matches("[data-savings-allocation]")) return;
+    event.target.value = formatNumberInput(event.target.value);
+    updateAllocationStatus();
+  });
   $("#memberRolePreset").addEventListener("change", toggleCustomRoleField);
   $("#removeMemberConfirmation").addEventListener("input", updateRemoveMemberButton);
+  $("#archiveSavingsConfirmation").addEventListener("input", updateArchiveSavingsButton);
+  $("#paydayEnabled").addEventListener("change", updatePaydaySettingsFields);
 }
 
 function setAuthMode(mode) {
@@ -469,6 +493,9 @@ function fillProfile() {
   $("#mobileHouseholdName").textContent = state.household.name;
   $("#sidebarInviteCode").textContent = state.household.invite_code;
   $("#manageMembersButton").classList.toggle("hidden", !isRoomMaster());
+  $("#editHouseholdNameButton").classList.toggle("hidden", !isRoomMaster());
+  $("#manageSavingsButton").classList.toggle("hidden", !isRoomMaster());
+  $("#paydaySettingsButton").classList.toggle("hidden", !isRoomMaster());
 }
 
 function isRoomMaster() {
@@ -491,6 +518,22 @@ function memberRoleLabel(member) {
 
 function memberBalanceKey(userId) {
   return `member:${userId}`;
+}
+
+function savingsBalanceKey(accountId) {
+  return `saving:${accountId}`;
+}
+
+function activeSavingsAccounts() {
+  return state.savingsAccounts.filter((account) => !account.is_archived);
+}
+
+function savingsAccountById(accountId) {
+  return state.savingsAccounts.find((account) => String(account.id) === String(accountId)) ?? null;
+}
+
+function savingsAccountByLegacyKey(legacyKey) {
+  return state.savingsAccounts.find((account) => account.legacy_key === legacyKey) ?? null;
 }
 
 function memberColorClass(member) {
@@ -535,6 +578,184 @@ async function saveUserName(event) {
     await loadFinanceData();
     fillProfile();
     showToast("Nama pengguna berhasil diperbarui.");
+  }
+  setButtonBusy(button, false);
+}
+
+function openHouseholdNameDialog() {
+  if (!isRoomMaster()) return;
+  $("#householdNameInput").value = state.household.name || "";
+  openModal($("#householdNameDialog"));
+  setTimeout(() => $("#householdNameInput").focus(), 0);
+}
+
+async function saveHouseholdName(event) {
+  event.preventDefault();
+  if (!isRoomMaster()) return;
+  const name = $("#householdNameInput").value.trim();
+  if (!name || name.length > 50) {
+    showToast("Nama keluarga harus terdiri dari 1–50 karakter.", "error");
+    return;
+  }
+  const button = $("#saveHouseholdNameButton");
+  setButtonBusy(button, true, "Menyimpan…");
+  const { error } = await supabase.rpc("update_household_name", { new_name: name });
+  if (error) {
+    showToast(error.message, "error");
+  } else {
+    state.household.name = name;
+    $("#householdNameDialog").close();
+    fillProfile();
+    showToast("Nama keluarga berhasil diperbarui.");
+  }
+  setButtonBusy(button, false);
+}
+
+function openPaydaySettingsDialog() {
+  if (!isRoomMaster()) return;
+  $("#paydayEnabled").checked = state.household.payday_enabled !== false;
+  $("#paydayDay").value = Number(state.household.payday_day || 10);
+  updatePaydaySettingsFields();
+  openModal($("#paydaySettingsDialog"));
+}
+
+function updatePaydaySettingsFields() {
+  const enabled = $("#paydayEnabled").checked;
+  $("#paydayDayGroup").classList.toggle("disabled-field", !enabled);
+  $("#paydayDay").disabled = !enabled;
+  $("#paydayDay").required = enabled;
+}
+
+async function savePaydaySettings(event) {
+  event.preventDefault();
+  if (!isRoomMaster()) return;
+  const enabled = $("#paydayEnabled").checked;
+  const day = enabled ? Number($("#paydayDay").value) : Number(state.household.payday_day || 10);
+  if (enabled && (!Number.isInteger(day) || day < 1 || day > 31)) {
+    showToast("Tanggal gajian harus antara 1–31.", "error");
+    return;
+  }
+  const button = $("#savePaydaySettingsButton");
+  setButtonBusy(button, true, "Menyimpan…");
+  const { error } = await supabase.rpc("update_household_payday", { enabled, salary_day: day });
+  if (error) {
+    showToast(error.message, "error");
+  } else {
+    state.household.payday_enabled = enabled;
+    state.household.payday_day = day;
+    $("#paydaySettingsDialog").close();
+    renderDashboard();
+    showToast(enabled ? `Tanggal gajian diatur setiap tanggal ${day}.` : "Tanggal gajian dinonaktifkan. Rekomendasi mengikuti awal bulan.");
+  }
+  setButtonBusy(button, false);
+}
+
+function openSavingsDialog() {
+  if (!isRoomMaster()) return;
+  renderSavingsAccountList();
+  openModal($("#savingsDialog"));
+}
+
+function renderSavingsAccountList() {
+  const totals = getTotals();
+  const accounts = activeSavingsAccounts();
+  $("#savingsAccountList").innerHTML = accounts.length ? accounts.map((account) => {
+    const balance = Number(totals.savingsAccountBalances[String(account.id)] || 0);
+    return `
+      <article class="member-management-row savings-account-row">
+        <div class="member-management-avatar member-color-${Number(account.sort_order || 0) % 8}">◇</div>
+        <div class="member-management-info">
+          <div><strong>${escapeHtml(account.name)}</strong>${account.include_in_net_worth ? "<b>Masuk total</b>" : "<b>Di luar total</b>"}</div>
+          <small>Saldo ${formatRupiah(balance)}</small>
+        </div>
+        <div class="member-management-actions">
+          <button data-edit-savings="${account.id}" type="button">✎ Edit</button>
+          <button class="remove" data-archive-savings="${account.id}" type="button">Hapus</button>
+        </div>
+      </article>`;
+  }).join("") : `<div class="empty-state compact"><h4>Belum ada tabungan aktif</h4><p>Tambahkan pos untuk mulai membagi saldo.</p></div>`;
+  $$('[data-edit-savings]').forEach((button) => button.addEventListener("click", () => openSavingsAccountForm(button.dataset.editSavings)));
+  $$('[data-archive-savings]').forEach((button) => button.addEventListener("click", () => openArchiveSavingsDialog(button.dataset.archiveSavings)));
+}
+
+function openSavingsAccountForm(accountId = null) {
+  if (!isRoomMaster()) return;
+  const account = accountId ? savingsAccountById(accountId) : null;
+  state.editingSavingsAccountId = account?.id || null;
+  $("#savingsAccountForm").reset();
+  $("#savingsAccountFormTitle").textContent = account ? "Edit tabungan" : "Tambah tabungan";
+  $("#savingsAccountName").value = account?.name || "";
+  $("#savingsIncludeNetWorth").checked = account ? Boolean(account.include_in_net_worth) : true;
+  openModal($("#savingsAccountFormDialog"));
+  setTimeout(() => $("#savingsAccountName").focus(), 0);
+}
+
+async function saveSavingsAccount(event) {
+  event.preventDefault();
+  if (!isRoomMaster()) return;
+  const name = $("#savingsAccountName").value.trim();
+  if (!name || name.length > 40) {
+    showToast("Nama tabungan harus terdiri dari 1–40 karakter.", "error");
+    return;
+  }
+  const button = $("#saveSavingsAccountButton");
+  setButtonBusy(button, true, "Menyimpan…");
+  const { error } = await supabase.rpc("save_savings_account", {
+    p_account_id: state.editingSavingsAccountId,
+    p_name: name,
+    p_include_in_net_worth: $("#savingsIncludeNetWorth").checked,
+  });
+  if (error) {
+    showToast(error.message, "error");
+  } else {
+    $("#savingsAccountFormDialog").close();
+    showToast(state.editingSavingsAccountId ? "Tabungan berhasil diperbarui." : "Tabungan berhasil ditambahkan.");
+    state.editingSavingsAccountId = null;
+    await loadFinanceData();
+    if ($("#savingsDialog").open) renderSavingsAccountList();
+  }
+  setButtonBusy(button, false);
+}
+
+function openArchiveSavingsDialog(accountId) {
+  if (!isRoomMaster()) return;
+  const account = savingsAccountById(accountId);
+  if (!account || account.is_archived) return;
+  state.archivingSavingsAccountId = account.id;
+  const balance = Number(getTotals().savingsAccountBalances[String(account.id)] || 0);
+  $("#archiveSavingsConfirmation").value = "";
+  $("#archiveSavingsCopy").textContent = `${account.name} akan disembunyikan dari dashboard dan form baru. Riwayat lama tetap tersimpan.`;
+  $("#archiveSavingsBalance").innerHTML = `<span>Saldo saat ini</span><strong>${formatRupiah(balance)}</strong>`;
+  $("#archiveSavingsBalance").dataset.canArchive = String(balance === 0);
+  updateArchiveSavingsButton();
+  openModal($("#archiveSavingsDialog"));
+}
+
+function updateArchiveSavingsButton() {
+  const confirmed = $("#archiveSavingsConfirmation").value.trim().toUpperCase() === "HAPUS";
+  const zeroBalance = $("#archiveSavingsBalance").dataset.canArchive === "true";
+  $("#confirmArchiveSavingsButton").disabled = !(confirmed && zeroBalance);
+  $("#archiveSavingsBalance").classList.toggle("warning", !zeroBalance);
+}
+
+async function archiveSavingsAccount(event) {
+  event.preventDefault();
+  const confirmation = $("#archiveSavingsConfirmation").value.trim().toUpperCase();
+  if (!isRoomMaster() || confirmation !== "HAPUS" || $("#archiveSavingsBalance").dataset.canArchive !== "true") return;
+  const button = $("#confirmArchiveSavingsButton");
+  setButtonBusy(button, true, "Mengarsipkan…");
+  const { error } = await supabase.rpc("archive_savings_account", {
+    p_account_id: state.archivingSavingsAccountId,
+    confirmation_text: confirmation,
+  });
+  if (error) {
+    showToast(error.message, "error");
+  } else {
+    $("#archiveSavingsDialog").close();
+    showToast("Tabungan berhasil diarsipkan. Riwayat lama tetap aman.");
+    state.archivingSavingsAccountId = null;
+    await loadFinanceData();
+    if ($("#savingsDialog").open) renderSavingsAccountList();
   }
   setButtonBusy(button, false);
 }
@@ -717,14 +938,12 @@ function renderMemberFilters() {
 function getTotals() {
   let income = 0;
   let outcome = 0;
-  let savings = 0;
-  let wifeSavings = 0;
-  let education = 0;
   let monthIncome = 0;
   let monthOutcome = 0;
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const memberBalances = Object.fromEntries(state.householdMembers.map((member) => [String(member.user_id), 0]));
+  const savingsAccountBalances = Object.fromEntries(state.savingsAccounts.map((account) => [String(account.id), 0]));
   const legacyOwner = state.householdMembers
     .filter((member) => member.system_role === "owner")
     .sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at)))[0];
@@ -736,12 +955,22 @@ function getTotals() {
     const key = String(userId);
     memberBalances[key] = Number(memberBalances[key] || 0) + Number(amount || 0);
   };
+  const addSavingsBalance = (accountId, amount) => {
+    if (!accountId) return;
+    const key = String(accountId);
+    savingsAccountBalances[key] = Number(savingsAccountBalances[key] || 0) + Number(amount || 0);
+  };
   const transferMemberId = (item, side) => {
     const balance = item[`${side}_balance`];
     if (balance === "member") return item[`${side}_member_id`];
     if (balance === "husband") return legacyOwner?.user_id;
     if (balance === "wife") return legacyMember?.user_id;
     return null;
+  };
+  const transferSavingsId = (item, side) => {
+    const balance = item[`${side}_balance`];
+    if (balance === "savings_account") return item[`${side}_savings_account_id`];
+    return savingsAccountByLegacyKey(balance)?.id || null;
   };
 
   state.transactions.forEach((item) => {
@@ -751,18 +980,15 @@ function getTotals() {
       Object.entries(item.member_allocations || {}).forEach(([userId, allocation]) => addMemberBalance(userId, allocation));
       addMemberBalance(legacyOwner?.user_id, item.husband_allocation);
       addMemberBalance(legacyMember?.user_id, item.wife_allocation);
-      savings += Number(item.savings_allocation);
-      wifeSavings += Number(item.wife_savings_allocation ?? 0);
-      education += Number(item.education_allocation ?? 0);
+      Object.entries(transactionSavingsAllocations(item)).forEach(([accountId, allocation]) => addSavingsBalance(accountId, allocation));
       if (item.date.startsWith(monthKey)) monthIncome += amount;
     } else {
       outcome += amount;
       if (item.source === "member") addMemberBalance(item.source_member_id, -amount);
       if (item.source === "husband") addMemberBalance(legacyOwner?.user_id, -amount);
       if (item.source === "wife") addMemberBalance(legacyMember?.user_id, -amount);
-      if (item.source === "savings") savings -= amount;
-      if (item.source === "wife_savings") wifeSavings -= amount;
-      if (item.source === "education") education -= amount;
+      if (item.source === "savings_account") addSavingsBalance(item.source_savings_id, -amount);
+      else addSavingsBalance(savingsAccountByLegacyKey(item.source)?.id, -amount);
       if (item.date.startsWith(monthKey)) monthOutcome += amount;
     }
   });
@@ -770,13 +996,9 @@ function getTotals() {
   state.transfers.forEach((item) => {
     const amount = Number(item.amount);
     addMemberBalance(transferMemberId(item, "from"), -amount);
-    if (item.from_balance === "savings") savings -= amount;
-    if (item.from_balance === "wife_savings") wifeSavings -= amount;
-    if (item.from_balance === "education") education -= amount;
+    addSavingsBalance(transferSavingsId(item, "from"), -amount);
     addMemberBalance(transferMemberId(item, "to"), amount);
-    if (item.to_balance === "savings") savings += amount;
-    if (item.to_balance === "wife_savings") wifeSavings += amount;
-    if (item.to_balance === "education") education += amount;
+    addSavingsBalance(transferSavingsId(item, "to"), amount);
   });
 
   state.adjustments.forEach((item) => {
@@ -784,20 +1006,26 @@ function getTotals() {
     if (item.balance_key === "member") addMemberBalance(item.member_user_id, delta);
     if (item.balance_key === "husband") addMemberBalance(legacyOwner?.user_id, delta);
     if (item.balance_key === "wife") addMemberBalance(legacyMember?.user_id, delta);
-    if (item.balance_key === "savings") savings += delta;
-    if (item.balance_key === "wife_savings") wifeSavings += delta;
-    if (item.balance_key === "education") education += delta;
+    if (item.balance_key === "savings_account") addSavingsBalance(item.savings_account_id, delta);
+    else addSavingsBalance(savingsAccountByLegacyKey(item.balance_key)?.id, delta);
   });
 
   const assetValue = state.assets.reduce((sum, item) => sum + Number(item.current_value), 0);
   const personalCash = Object.values(memberBalances).reduce((sum, value) => sum + Number(value), 0);
-  const cash = personalCash + savings + wifeSavings;
+  const includedSavings = state.savingsAccounts.reduce((sum, account) => (
+    account.include_in_net_worth ? sum + Number(savingsAccountBalances[String(account.id)] || 0) : sum
+  ), 0);
+  const savings = Number(savingsAccountBalances[String(savingsAccountByLegacyKey("savings")?.id)] || 0);
+  const wifeSavings = Number(savingsAccountBalances[String(savingsAccountByLegacyKey("wife_savings")?.id)] || 0);
+  const education = Number(savingsAccountBalances[String(savingsAccountByLegacyKey("education")?.id)] || 0);
+  const cash = personalCash + includedSavings;
   return {
     income,
     outcome,
     husband: Number(memberBalances[String(legacyOwner?.user_id)] || 0),
     wife: Number(memberBalances[String(legacyMember?.user_id)] || 0),
     memberBalances,
+    savingsAccountBalances,
     savings,
     wifeSavings,
     education,
@@ -813,16 +1041,17 @@ function renderDashboard() {
   const totals = getTotals();
   const payday = getNextPaydayInfo();
   $("#totalWealth").textContent = formatRupiah(totals.netWorth);
-  $("#savingsBalance").textContent = formatRupiah(totals.savings);
-  $("#educationBalance").textContent = formatRupiah(totals.education);
-  $("#wifeSavingsBalance").textContent = formatRupiah(totals.wifeSavings);
-  $("#assetValue").textContent = formatRupiah(totals.assetValue);
+  $("#wealthBreakdown").innerHTML = `${activeSavingsAccounts().map((account) => `
+    <div><span>${escapeHtml(account.name)}${account.include_in_net_worth ? "" : " · Di luar total"}</span><strong>${formatRupiah(totals.savingsAccountBalances[String(account.id)] || 0)}</strong></div>
+  `).join("")}<div><span>Nilai aset</span><strong>${formatRupiah(totals.assetValue)}</strong></div>`;
+  const excludedCount = activeSavingsAccounts().filter((account) => !account.include_in_net_worth).length;
+  $("#wealthFooter").textContent = `Total mencakup seluruh saldo pribadi anggota, ${activeSavingsAccounts().length - excludedCount} pos tabungan yang disertakan, dan nilai aset.${excludedCount ? ` ${excludedCount} pos ditampilkan tetapi tidak dihitung.` : ""}`;
   $("#monthIncome").textContent = formatRupiah(totals.monthIncome);
   $("#monthOutcome").textContent = formatRupiah(totals.monthOutcome);
   $("#monthDifference").textContent = formatRupiah(totals.monthIncome - totals.monthOutcome);
   $("#totalWealth").classList.toggle("negative", totals.netWorth < 0);
   $("#paydayCountdown").innerHTML = `
-    <span>Menuju gajian</span>
+    <span>${payday.enabled ? "Menuju gajian" : "Menuju awal bulan"}</span>
     <strong>${payday.days} hari lagi</strong>
     <small>${payday.date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</small>`;
 
@@ -944,7 +1173,7 @@ function renderTransactions() {
           <div class="transaction-icon ${item.type}">${item.type === "income" ? "↙" : "↗"}</div>
           ${transactionDetailsHtml(item)}
         </div>
-        <span>${item.type === "income" ? incomeAllocationSummary(item) : sourceLabel(item.source, item.source_member_id)}</span>
+        <span>${item.type === "income" ? incomeAllocationSummary(item) : sourceLabel(item.source, item.source_member_id, item.source_savings_id)}</span>
         <strong class="${item.type === "income" ? "positive" : "negative"}">${item.type === "income" ? "+" : "−"}${formatRupiah(item.amount)}</strong>
         ${canManageTransaction(item) ? `<div class="row-actions">
           <button class="edit-button" data-edit-transaction="${item.id}" type="button" aria-label="Edit transaksi" title="Edit">✎</button>
@@ -1077,18 +1306,23 @@ function transactionFinancialSignature(record = {}) {
   const memberAllocations = Object.fromEntries(
     Object.entries(record.member_allocations || {}).sort(([left], [right]) => left.localeCompare(right)),
   );
+  const savingsAllocations = Object.fromEntries(
+    Object.entries(record.savings_allocations || {}).sort(([left], [right]) => left.localeCompare(right)),
+  );
   return JSON.stringify({
     type: record.type ?? null,
     amount: Number(record.amount || 0),
     date: record.date ?? null,
     source: record.source ?? null,
     source_member_id: record.source_member_id ?? null,
+    source_savings_id: record.source_savings_id ?? null,
     husband_allocation: Number(record.husband_allocation || 0),
     wife_allocation: Number(record.wife_allocation || 0),
     savings_allocation: Number(record.savings_allocation || 0),
     wife_savings_allocation: Number(record.wife_savings_allocation || 0),
     education_allocation: Number(record.education_allocation || 0),
     member_allocations: memberAllocations,
+    savings_allocations: savingsAllocations,
   });
 }
 
@@ -1160,10 +1394,10 @@ function logDetail(log) {
   const details = log.details || {};
   const record = details.after || details.before || {};
   if (log.entity_type === "transfer") {
-    return `${escapeHtml(sourceLabel(record.from_balance, record.from_member_id))} → ${escapeHtml(sourceLabel(record.to_balance, record.to_member_id))} · ${formatRupiah(record.amount)}`;
+    return `${escapeHtml(sourceLabel(record.from_balance, record.from_member_id, record.from_savings_account_id))} → ${escapeHtml(sourceLabel(record.to_balance, record.to_member_id, record.to_savings_account_id))} · ${formatRupiah(record.amount)}`;
   }
   if (log.entity_type === "adjustment") {
-    return `${escapeHtml(sourceLabel(record.balance_key, record.member_user_id))}: ${formatRupiah(record.previous_balance)} → ${formatRupiah(record.new_balance)}${record.notes ? ` · ${escapeHtml(record.notes)}` : ""}`;
+    return `${escapeHtml(sourceLabel(record.balance_key, record.member_user_id, record.savings_account_id))}: ${formatRupiah(record.previous_balance)} → ${formatRupiah(record.new_balance)}${record.notes ? ` · ${escapeHtml(record.notes)}` : ""}`;
   }
   if (log.entity_type === "monthly_bill") {
     return `${escapeHtml(record.name || "Tagihan bulanan")} · ${formatRupiah(record.amount)} · Tanggal berlangganan ${Number(record.subscription_day) || "—"}`;
@@ -1232,8 +1466,6 @@ function transactionDetailsHtml(item) {
   const member = transactionMember(item);
   const role = memberColorClass(member);
   const roleLabel = memberRoleLabel(member);
-  const fallbackName = item.user_id === state.user?.id ? (state.user.email?.split("@")[0] || "Pengguna") : "Pengguna";
-  const displayName = member?.display_name || fallbackName;
   const description = item.description || (item.type === "income" ? "Pemasukan keluarga" : "Pengeluaran keluarga");
 
   return `
@@ -1241,7 +1473,7 @@ function transactionDetailsHtml(item) {
       <strong>${escapeHtml(item.category)}</strong>
       <span class="transaction-description">${escapeHtml(description)}</span>
       <time datetime="${escapeHtml(item.date)}">${formatDate(item.date, true)}</time>
-      <small class="member-name ${role}" title="Dicatat oleh ${escapeHtml(roleLabel)}">${escapeHtml(displayName)} · ${escapeHtml(roleLabel)}</small>
+      <small class="member-name ${role}" title="Role pencatat">${escapeHtml(roleLabel)}</small>
     </div>
   `;
 }
@@ -1269,13 +1501,26 @@ function transactionMemberAllocations(transaction) {
   return allocations;
 }
 
+function transactionSavingsAllocations(transaction) {
+  const allocations = { ...(transaction.savings_allocations || {}) };
+  const addLegacy = (legacyKey, amount) => {
+    const account = savingsAccountByLegacyKey(legacyKey);
+    if (!account || !Number(amount || 0)) return;
+    allocations[account.id] = Number(allocations[account.id] || 0) + Number(amount);
+  };
+  addLegacy("savings", transaction.savings_allocation);
+  addLegacy("wife_savings", transaction.wife_savings_allocation);
+  addLegacy("education", transaction.education_allocation);
+  return allocations;
+}
+
 function incomeAllocationSummary(transaction) {
   const labels = Object.entries(transactionMemberAllocations(transaction))
     .filter(([, amount]) => Number(amount) > 0)
     .map(([userId]) => memberRoleLabel(memberById(userId)) === "None" ? memberById(userId)?.display_name : memberRoleLabel(memberById(userId)));
-  if (Number(transaction.savings_allocation || 0)) labels.push("Tabungan bersama");
-  if (Number(transaction.wife_savings_allocation || 0)) labels.push("Tabungan istri");
-  if (Number(transaction.education_allocation || 0)) labels.push("Pendidikan");
+  Object.entries(transactionSavingsAllocations(transaction))
+    .filter(([, amount]) => Number(amount) > 0)
+    .forEach(([accountId]) => labels.push(savingsAccountById(accountId)?.name || "Tabungan"));
   return labels.filter(Boolean).join(" · ") || "Pembagian income";
 }
 
@@ -1306,11 +1551,9 @@ function openTransactionDetail(id) {
           const member = memberById(userId);
           return `<p><span>${escapeHtml(memberBalanceLabel(member))}${member?.is_active ? "" : " (akses dihapus)"}</span><strong>${formatRupiah(amount)}</strong></p>`;
         }).join("")}
-        <p><span>Tabungan bersama</span><strong>${formatRupiah(transaction.savings_allocation)}</strong></p>
-        <p><span>Tabungan istri</span><strong>${formatRupiah(transaction.wife_savings_allocation ?? 0)}</strong></p>
-        <p><span>Pendidikan</span><strong>${formatRupiah(transaction.education_allocation ?? 0)}</strong></p>
+        ${Object.entries(transactionSavingsAllocations(transaction)).filter(([, amount]) => Number(amount) > 0).map(([accountId, amount]) => `<p><span>${escapeHtml(savingsAccountById(accountId)?.name || "Tabungan diarsipkan")}</span><strong>${formatRupiah(amount)}</strong></p>`).join("")}
       </div></section>`
-    : `<div class="detail-field"><span>Sumber dana</span><strong>${escapeHtml(sourceLabel(transaction.source, transaction.source_member_id))}</strong></div>`;
+    : `<div class="detail-field"><span>Sumber dana</span><strong>${escapeHtml(sourceLabel(transaction.source, transaction.source_member_id, transaction.source_savings_id))}</strong></div>`;
 
   $("#transactionDetailBody").innerHTML = basicDetails + financeDetails;
   openModal($("#transactionDetailDialog"));
@@ -1368,6 +1611,14 @@ function renderMemberAllocationFields(transaction = null) {
   `).join("");
 }
 
+function renderSavingsAllocationFields(transaction = null) {
+  const values = transaction ? transactionSavingsAllocations(transaction) : {};
+  const visibleAccounts = state.savingsAccounts.filter((account) => !account.is_archived || Number(values[account.id] || 0) > 0);
+  $("#savingsAllocationFields").innerHTML = visibleAccounts.map((account) => `
+    <label><span>${escapeHtml(account.name)}${account.is_archived ? " · Diarsipkan" : ""}</span><div class="money-field small"><b>Rp</b><input data-savings-allocation="${account.id}" inputmode="numeric" placeholder="0" value="${formatNumberInput(values[account.id] || 0)}" ${account.is_archived ? "readonly" : ""} /></div></label>
+  `).join("");
+}
+
 function legacySourceMemberId(source) {
   const systemRole = source === "husband" ? "owner" : source === "wife" ? "member" : null;
   if (!systemRole) return null;
@@ -1380,6 +1631,7 @@ function openTransactionDialog(mode, transactionId = null) {
   state.transactionMode = mode;
   state.editingTransactionId = transactionId;
   $("#transactionForm").reset();
+  $("#transactionAmount").readOnly = false;
   $("#transactionDate").value = today;
   const isEditing = transactionId !== null;
   $("#transactionDialogTitle").textContent = isEditing
@@ -1388,11 +1640,12 @@ function openTransactionDialog(mode, transactionId = null) {
   $("#transactionDialogCopy").textContent = isEditing
     ? "Perbarui data transaksi lalu simpan perubahan."
     : mode === "income"
-      ? "Bagi pemasukan untuk anggota keluarga, tabungan bersama, tabungan istri, dan pendidikan."
+      ? "Bagi pemasukan untuk anggota keluarga dan pos tabungan yang aktif."
       : "Catat pengeluaran dan pilih sumber dananya.";
   $("#incomeAllocation").classList.toggle("hidden", mode !== "income");
   $("#outcomeSourceGroup").classList.toggle("hidden", mode !== "outcome");
   renderMemberAllocationFields(isEditing ? state.transactions.find((item) => String(item.id) === String(transactionId)) : null);
+  renderSavingsAllocationFields(isEditing ? state.transactions.find((item) => String(item.id) === String(transactionId)) : null);
   $("#outcomeSource").innerHTML = balanceOptionsHtml(null, true);
 
   const categories = mode === "income" ? incomeCategories : outcomeCategories;
@@ -1408,16 +1661,21 @@ function openTransactionDialog(mode, transactionId = null) {
     $("#transactionDate").value = transaction.date;
     $("#transactionCategory").value = transaction.category;
     $("#transactionDescription").value = transaction.description || "";
-    if (mode === "income") {
-      $("#savingsAllocation").value = formatNumberInput(transaction.savings_allocation);
-      $("#wifeSavingsAllocation").value = formatNumberInput(transaction.wife_savings_allocation ?? 0);
-      $("#educationAllocation").value = formatNumberInput(transaction.education_allocation ?? 0);
-    } else {
+    if (mode !== "income") {
       const sourceKey = transaction.source === "member"
         ? memberBalanceKey(transaction.source_member_id)
         : ["husband", "wife"].includes(transaction.source)
           ? memberBalanceKey(legacySourceMemberId(transaction.source))
-          : transaction.source;
+          : transaction.source === "savings_account"
+            ? savingsBalanceKey(transaction.source_savings_id)
+            : savingsBalanceKey(savingsAccountByLegacyKey(transaction.source)?.id);
+      const sourceAccount = transaction.source === "savings_account"
+        ? savingsAccountById(transaction.source_savings_id)
+        : savingsAccountByLegacyKey(transaction.source);
+      if (sourceAccount?.is_archived) {
+        $("#outcomeSource").insertAdjacentHTML("beforeend", `<option value="${sourceKey}">${escapeHtml(sourceAccount.name)} · Diarsipkan</option>`);
+        $("#transactionAmount").readOnly = true;
+      }
       $("#outcomeSource").value = sourceKey;
     }
   }
@@ -1428,28 +1686,49 @@ function openTransactionDialog(mode, transactionId = null) {
 async function saveTransaction(event) {
   event.preventDefault();
   const amount = parseNumber($("#transactionAmount").value);
+  const isEditing = state.editingTransactionId !== null;
+  const editingTransaction = isEditing ? state.transactions.find((item) => String(item.id) === String(state.editingTransactionId)) : null;
   const memberAllocations = Object.fromEntries(
     $$('[data-member-allocation]').map((input) => [input.dataset.memberAllocation, parseNumber(input.value)]).filter(([, value]) => value > 0),
   );
   const personalAllocated = Object.values(memberAllocations).reduce((sum, value) => sum + value, 0);
-  const savings = parseNumber($("#savingsAllocation").value);
-  const wifeSavings = parseNumber($("#wifeSavingsAllocation").value);
-  const education = parseNumber($("#educationAllocation").value);
+  const savingsAllocations = Object.fromEntries(
+    $$('[data-savings-allocation]').map((input) => [input.dataset.savingsAllocation, parseNumber(input.value)]).filter(([, value]) => value > 0),
+  );
+  const savingsAllocated = Object.values(savingsAllocations).reduce((sum, value) => sum + value, 0);
+  const archivedLegacyAllocations = { savings: 0, wife_savings: 0, education: 0 };
+  if (state.transactionMode === "income" && editingTransaction) {
+    ["savings", "wife_savings", "education"].forEach((legacyKey) => {
+      const account = savingsAccountByLegacyKey(legacyKey);
+      if (!account?.is_archived) return;
+      const field = legacyKey === "savings" ? "savings_allocation" : `${legacyKey}_allocation`;
+      archivedLegacyAllocations[legacyKey] = Number(editingTransaction[field] || 0);
+      const originalDynamicValue = Number(editingTransaction.savings_allocations?.[account.id] || 0);
+      if (originalDynamicValue > 0) savingsAllocations[account.id] = originalDynamicValue;
+      else delete savingsAllocations[account.id];
+    });
+  }
 
   if (amount <= 0) {
     showToast("Nominal harus lebih dari nol.", "error");
     return;
   }
-  if (state.transactionMode === "income" && personalAllocated + savings + wifeSavings + education !== amount) {
+  if (state.transactionMode === "income" && personalAllocated + savingsAllocated !== amount) {
     showToast("Total pembagian harus sama dengan nominal income.", "error");
     return;
   }
 
   const button = $("#saveTransactionButton");
   setButtonBusy(button, true, "Menyimpan…");
-  const isEditing = state.editingTransactionId !== null;
   const selectedSource = state.transactionMode === "outcome" ? $("#outcomeSource").value : null;
   const personalSource = selectedSource?.startsWith("member:");
+  const savingsSource = selectedSource?.startsWith("saving:");
+  const selectedSavingsAccount = savingsSource ? savingsAccountById(selectedSource.slice(7)) : null;
+  const preserveArchivedLegacySource = Boolean(
+    savingsSource
+    && selectedSavingsAccount?.is_archived
+    && ["savings", "wife_savings", "education"].includes(editingTransaction?.source),
+  );
   const payload = {
     household_id: state.household.id,
     type: state.transactionMode,
@@ -1457,14 +1736,16 @@ async function saveTransaction(event) {
     date: $("#transactionDate").value,
     category: $("#transactionCategory").value,
     description: $("#transactionDescription").value.trim(),
-    source: state.transactionMode === "outcome" ? (personalSource ? "member" : selectedSource) : null,
+    source: state.transactionMode === "outcome" ? (personalSource ? "member" : preserveArchivedLegacySource ? editingTransaction.source : savingsSource ? "savings_account" : selectedSource) : null,
     source_member_id: personalSource ? selectedSource.slice(7) : null,
+    source_savings_id: savingsSource && !preserveArchivedLegacySource ? selectedSource.slice(7) : null,
     member_allocations: state.transactionMode === "income" ? memberAllocations : {},
+    savings_allocations: state.transactionMode === "income" ? savingsAllocations : {},
     husband_allocation: 0,
     wife_allocation: 0,
-    savings_allocation: state.transactionMode === "income" ? savings : 0,
-    wife_savings_allocation: state.transactionMode === "income" ? wifeSavings : 0,
-    education_allocation: state.transactionMode === "income" ? education : 0,
+    savings_allocation: archivedLegacyAllocations.savings,
+    wife_savings_allocation: archivedLegacyAllocations.wife_savings,
+    education_allocation: archivedLegacyAllocations.education,
   };
   if (!isEditing) payload.user_id = state.user.id;
 
@@ -1503,9 +1784,7 @@ async function saveTransaction(event) {
 function updateAllocationStatus() {
   const amount = parseNumber($("#transactionAmount").value);
   const allocated = $$('[data-member-allocation]').reduce((sum, input) => sum + parseNumber(input.value), 0)
-    + parseNumber($("#savingsAllocation").value)
-    + parseNumber($("#wifeSavingsAllocation").value)
-    + parseNumber($("#educationAllocation").value);
+    + $$('[data-savings-allocation]').reduce((sum, input) => sum + parseNumber(input.value), 0);
   const remaining = amount - allocated;
   const status = $("#allocationRemaining");
   status.textContent = remaining === 0 ? "Pas" : `Sisa ${formatRupiah(remaining)}`;
@@ -2061,7 +2340,7 @@ async function deleteTransaction(id) {
     const balances = currentBalanceMap();
     const currentBalances = { ...balances };
     applyTransactionEffect(balances, transaction, -1);
-    const negativeKey = sharedBalanceOptions.find((item) => balances[item.key] < 0)?.key;
+    const negativeKey = Object.entries(balances).find(([key, value]) => key.startsWith("saving:") && value < 0)?.[0];
     if (negativeKey) {
       showToast(`Transaksi tidak dapat dihapus karena saldo ${sourceLabel(negativeKey)} akan menjadi minus.`, "error");
       return;
@@ -2197,11 +2476,21 @@ function getNextPaydayInfo(referenceDate = new Date()) {
   const year = referenceDate.getFullYear();
   const month = referenceDate.getMonth();
   const day = referenceDate.getDate();
-  const payday = new Date(year, month + (day >= 10 ? 1 : 0), 10);
+  const enabled = state.household?.payday_enabled !== false;
+  const configuredDay = Math.min(31, Math.max(1, Number(state.household?.payday_day || 10)));
+  const dateInMonth = (targetYear, targetMonth) => new Date(
+    targetYear,
+    targetMonth,
+    Math.min(configuredDay, new Date(targetYear, targetMonth + 1, 0).getDate()),
+  );
+  let payday = enabled ? dateInMonth(year, month) : new Date(year, month + 1, 1);
+  if (enabled && Date.UTC(year, month, day) >= Date.UTC(payday.getFullYear(), payday.getMonth(), payday.getDate())) {
+    payday = dateInMonth(year, month + 1);
+  }
   const currentUtc = Date.UTC(year, month, day);
   const paydayUtc = Date.UTC(payday.getFullYear(), payday.getMonth(), payday.getDate());
   const days = Math.max(1, Math.round((paydayUtc - currentUtc) / 86400000));
-  return { date: payday, days };
+  return { date: payday, days, enabled };
 }
 
 function historyCategoryColor(category, type) {
@@ -2220,13 +2509,14 @@ function formatQuantity(value) {
   return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(Number(value));
 }
 
-function sourceLabel(source, memberId = null) {
+function sourceLabel(source, memberId = null, savingsAccountId = null) {
   if (source === "member") return memberBalanceLabel(memberById(memberId));
+  if (source?.startsWith("member:")) return memberBalanceLabel(memberById(source.slice(7)));
+  if (source === "savings_account") return savingsAccountById(savingsAccountId)?.name || "Tabungan diarsipkan";
+  if (source?.startsWith("saving:")) return savingsAccountById(source.slice(7))?.name || "Tabungan diarsipkan";
   if (source === "husband") return memberBalanceLabel(memberById(legacySourceMemberId("husband"))) || "Uang suami";
   if (source === "wife") return memberBalanceLabel(memberById(legacySourceMemberId("wife"))) || "Uang istri";
-  if (source === "wife_savings") return "Tabungan istri";
-  if (source === "education") return "Pendidikan";
-  return "Tabungan bersama";
+  return savingsAccountByLegacyKey(source)?.name || "Tabungan";
 }
 
 function getBalanceOptions() {
@@ -2236,7 +2526,11 @@ function getBalanceOptions() {
       label: `${memberBalanceLabel(member)} · ${member.display_name}`,
       personal: true,
     })),
-    ...sharedBalanceOptions,
+    ...activeSavingsAccounts().map((account) => ({
+      key: savingsBalanceKey(account.id),
+      label: account.name,
+      personal: false,
+    })),
   ];
 }
 
@@ -2252,9 +2546,9 @@ function balanceValue(totals, key) {
   if (key?.startsWith("member:")) return Number(totals.memberBalances[key.slice(7)] || 0);
   if (key === "husband") return Number(totals.husband);
   if (key === "wife") return Number(totals.wife);
-  if (key === "savings") return Number(totals.savings);
-  if (key === "wife_savings") return Number(totals.wifeSavings);
-  if (key === "education") return Number(totals.education);
+  if (key?.startsWith("saving:")) return Number(totals.savingsAccountBalances[key.slice(7)] || 0);
+  const legacyAccount = savingsAccountByLegacyKey(key);
+  if (legacyAccount) return Number(totals.savingsAccountBalances[String(legacyAccount.id)] || 0);
   return 0;
 }
 
@@ -2269,15 +2563,18 @@ function applyTransactionEffect(balances, transaction, multiplier = 1) {
       const key = memberBalanceKey(userId);
       if (Object.hasOwn(balances, key)) balances[key] += multiplier * Number(amount || 0);
     });
-    balances.savings += multiplier * Number(transaction.savings_allocation || 0);
-    balances.wife_savings += multiplier * Number(transaction.wife_savings_allocation || 0);
-    balances.education += multiplier * Number(transaction.education_allocation || 0);
+    Object.entries(transactionSavingsAllocations(transaction)).forEach(([accountId, amount]) => {
+      const key = savingsBalanceKey(accountId);
+      if (Object.hasOwn(balances, key)) balances[key] += multiplier * Number(amount || 0);
+    });
   } else {
     const key = transaction.source === "member"
       ? memberBalanceKey(transaction.source_member_id)
       : transaction.source === "husband" || transaction.source === "wife"
         ? memberBalanceKey(legacySourceMemberId(transaction.source))
-        : transaction.source;
+        : transaction.source === "savings_account"
+          ? savingsBalanceKey(transaction.source_savings_id)
+          : savingsBalanceKey(savingsAccountByLegacyKey(transaction.source)?.id);
     if (key && Object.hasOwn(balances, key)) balances[key] -= multiplier * Number(transaction.amount || 0);
   }
 }
@@ -2289,7 +2586,7 @@ function projectedNegativeBalance(payload, editingId = null) {
     if (previous) applyTransactionEffect(balances, previous, -1);
   }
   applyTransactionEffect(balances, payload, 1);
-  return sharedBalanceOptions.find((item) => balances[item.key] < 0)?.key || null;
+  return Object.entries(balances).find(([key, value]) => key.startsWith("saving:") && value < 0)?.[0] || null;
 }
 
 function projectedPersonalDeficit(payload, editingId = null) {

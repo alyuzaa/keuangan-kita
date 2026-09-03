@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Pencatatan keuangan bersama untuk seluruh anggota keluarga." />
     <meta name="theme-color" content="#173f33" />
-    <meta name="app-version" content="20" />
+    <meta name="app-version" content="21" />
     <title>Keuangan Kita</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=20" />
+    <link rel="stylesheet" href="./styles.css?v=21" />
   </head>
   <body>
     <div id="configError" class="config-error hidden">
@@ -86,6 +86,7 @@
           <div class="brand-icon">♡</div>
           <div class="desktop-brand-copy"><strong>Keuangan Kita</strong><span id="sidebarHousehold">Catatan keluarga</span></div>
           <div class="mobile-brand-copy"><span>Selamat datang,</span><strong id="mobileHouseholdName">Keluarga</strong></div>
+          <button id="editHouseholdNameButton" class="household-name-edit-button hidden" type="button" aria-label="Edit nama keluarga" title="Edit nama keluarga">✎</button>
         </div>
 
         <nav aria-label="Menu utama">
@@ -136,15 +137,13 @@
             <article class="wealth-card">
               <div class="wealth-heading">
                 <div><span>Total kekayaan keluarga</span><h2 id="totalWealth">Rp0</h2></div>
-                <button id="adjustBalanceButton" class="wealth-adjust-button" type="button" aria-label="Penyesuaian saldo"><span>±</span><b class="adjust-label-full">Penyesuaian saldo</b><b class="adjust-label-short">Sesuaikan</b></button>
+                <div class="wealth-actions">
+                  <button id="adjustBalanceButton" class="wealth-adjust-button" type="button" aria-label="Penyesuaian saldo"><span>±</span><b class="adjust-label-full">Penyesuaian saldo</b><b class="adjust-label-short">Sesuaikan</b></button>
+                  <button id="manageSavingsButton" class="wealth-adjust-button hidden" type="button" aria-label="Atur tabungan"><span>⚙</span><b>Atur tabungan</b></button>
+                </div>
               </div>
-              <div class="wealth-breakdown">
-                <div><span>Tabungan bersama</span><strong id="savingsBalance">Rp0</strong></div>
-                <div><span>Pendidikan</span><strong id="educationBalance">Rp0</strong></div>
-                <div><span>Tabungan istri</span><strong id="wifeSavingsBalance">Rp0</strong></div>
-                <div><span>Nilai aset</span><strong id="assetValue">Rp0</strong></div>
-              </div>
-              <div class="wealth-footer">Total mencakup seluruh saldo pribadi anggota, tabungan bersama, tabungan istri, dan nilai aset. Pendidikan tidak dihitung.</div>
+              <div id="wealthBreakdown" class="wealth-breakdown"></div>
+              <div id="wealthFooter" class="wealth-footer">Total mencakup saldo pribadi, pos tabungan yang disertakan, dan nilai aset.</div>
             </article>
 
             <article class="month-card panel">
@@ -155,7 +154,7 @@
             </article>
 
             <article class="allocation-card panel">
-              <div class="section-title"><div><span>Pembagian saldo</span><h3>Sisa saldo saat ini</h3></div><div id="paydayCountdown" class="payday-countdown" aria-live="polite"></div></div>
+              <div class="section-title"><div><span>Pembagian saldo</span><h3>Sisa saldo saat ini</h3></div><div class="payday-controls"><div id="paydayCountdown" class="payday-countdown" aria-live="polite"></div><button id="paydaySettingsButton" class="payday-settings-button hidden" type="button">Atur gajian</button></div></div>
               <div id="allocationList" class="allocation-list"></div>
             </article>
 
@@ -243,9 +242,7 @@
           <section id="incomeAllocation" class="allocation-form full">
             <div class="allocation-form-title"><div><strong>Pembagian income</strong><span>Total harus sama dengan nominal income.</span></div><b id="allocationRemaining">Pas</b></div>
             <div id="memberAllocationFields" class="member-allocation-fields"></div>
-            <label><span>Tabungan bersama</span><div class="money-field small"><b>Rp</b><input id="savingsAllocation" inputmode="numeric" placeholder="0" /></div></label>
-            <label><span>Tabungan istri</span><div class="money-field small"><b>Rp</b><input id="wifeSavingsAllocation" inputmode="numeric" placeholder="0" /></div></label>
-            <label><span>Pendidikan</span><div class="money-field small"><b>Rp</b><input id="educationAllocation" inputmode="numeric" placeholder="0" /></div></label>
+            <div id="savingsAllocationFields" class="member-allocation-fields"></div>
           </section>
 
           <label id="outcomeSourceGroup" class="full hidden"><span>Sumber dana</span><select id="outcomeSource"></select></label>
@@ -371,6 +368,63 @@
       </form>
     </dialog>
 
+    <dialog id="householdNameDialog" class="modal small-modal">
+      <form id="householdNameForm" method="dialog">
+        <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
+        <header><h2>Edit nama keluarga</h2><p>Nama ini tampil pada bagian atas ruang keluarga.</p></header>
+        <div class="form-grid">
+          <label class="full"><span>Nama keluarga</span><input id="householdNameInput" type="text" minlength="1" maxlength="50" required /></label>
+          <button id="saveHouseholdNameButton" class="button primary full submit-button" type="submit">Simpan nama keluarga</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="paydaySettingsDialog" class="modal small-modal">
+      <form id="paydaySettingsForm" method="dialog">
+        <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
+        <header><h2>Atur tanggal gajian</h2><p>Pengaturan ini menentukan pembagi rekomendasi pengeluaran harian seluruh anggota.</p></header>
+        <div class="form-grid">
+          <label class="toggle-field full"><input id="paydayEnabled" type="checkbox" /><span><b>Tampilkan tanggal gajian</b><small>Jika nonaktif, rekomendasi dihitung sampai awal bulan berikutnya.</small></span></label>
+          <label id="paydayDayGroup" class="full"><span>Tanggal gajian</span><input id="paydayDay" type="number" inputmode="numeric" min="1" max="31" required /></label>
+          <button id="savePaydaySettingsButton" class="button primary full submit-button" type="submit">Simpan pengaturan</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="savingsDialog" class="modal members-modal">
+      <div class="members-content savings-content">
+        <button class="modal-close" type="button" aria-label="Tutup">×</button>
+        <header><span class="detail-type">POS TABUNGAN</span><h2>Atur tabungan</h2><p>Tambah, ubah nama, pilih penyertaan dalam total kekayaan, atau arsipkan pos yang saldonya sudah nol.</p></header>
+        <button id="addSavingsAccountButton" class="button primary savings-add-button" type="button">＋ Tambah tabungan</button>
+        <div id="savingsAccountList" class="members-list savings-account-list"></div>
+        <p class="members-note">Pos yang diarsipkan hilang dari form baru, tetapi namanya tetap tersimpan pada riwayat lama.</p>
+      </div>
+    </dialog>
+
+    <dialog id="savingsAccountFormDialog" class="modal small-modal">
+      <form id="savingsAccountForm" method="dialog">
+        <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
+        <header><h2 id="savingsAccountFormTitle">Tambah tabungan</h2><p>Nama pos dapat diubah tanpa memutus riwayat transaksi lama.</p></header>
+        <div class="form-grid">
+          <label class="full"><span>Nama tabungan</span><input id="savingsAccountName" type="text" minlength="1" maxlength="40" placeholder="Contoh: Dana darurat" required /></label>
+          <label class="toggle-field full"><input id="savingsIncludeNetWorth" type="checkbox" checked /><span><b>Sertakan dalam total kekayaan</b><small>Matikan untuk pos seperti pendidikan yang ingin dipantau terpisah.</small></span></label>
+          <button id="saveSavingsAccountButton" class="button primary full submit-button" type="submit">Simpan tabungan</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="archiveSavingsDialog" class="modal small-modal danger-modal">
+      <form id="archiveSavingsForm" method="dialog">
+        <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
+        <header><h2>Arsipkan tabungan</h2><p id="archiveSavingsCopy"></p></header>
+        <div id="archiveSavingsBalance" class="balance-hint full"></div>
+        <div class="form-grid remove-member-form-grid">
+          <label class="full"><span>Ketik <b>HAPUS</b> untuk verifikasi</span><input id="archiveSavingsConfirmation" type="text" autocomplete="off" placeholder="HAPUS" required /></label>
+          <button id="confirmArchiveSavingsButton" class="button danger full submit-button" type="submit" disabled>Arsipkan tabungan</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="membersDialog" class="modal members-modal">
       <div class="members-content">
         <button class="modal-close" type="button" aria-label="Tutup">×</button>
@@ -405,6 +459,6 @@
     </dialog>
 
     <div id="toastContainer" class="toast-container" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=20"></script>
+    <script type="module" src="./app.js?v=21"></script>
   </body>
 </html>
