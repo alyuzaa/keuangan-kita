@@ -55,8 +55,7 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .auth-tabs button.active { color: var(--green); background: var(--paper); box-shadow: 0 2px 8px rgba(37, 64, 52, .08); }
 .auth-form { display: grid; gap: 14px; text-align: left; }
 .auth-form .text-button { margin: -5px auto 0; }
-.auth-field-hint, .auth-recovery-note { display: block; color: #879087; font-size: 10px; line-height: 1.45; }
-.auth-field-hint { margin-top: 6px; }
+.auth-recovery-note { display: block; color: #879087; font-size: 10px; line-height: 1.45; }
 .auth-recovery-note { margin: -3px auto 0; text-align: center; }
 .security-note { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 20px; color: #89908a; font-size: 11px; }
 .security-icon { color: var(--green); font-size: 19px; }
