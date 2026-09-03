@@ -6,7 +6,7 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 
 ## Fitur
 
-- Login dan pendaftaran dengan email + password.
+- Login dan pendaftaran dengan username + password tanpa verifikasi email.
 - Hingga delapan akun aktif dalam satu ruang keluarga.
 - Kode undangan 12 karakter untuk menghubungkan anggota keluarga.
 - Room master dapat memberi role `Suami`, `Istri`, `Anak`, `None`, atau nama role bebas tanpa mengubah hak akses sistem.
@@ -49,6 +49,7 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 | `supabase-migration-family-members.sql` | Upgrade anggota dinamis, role keluarga, saldo pribadi, izin room master, dan saldo defisit |
 | `supabase-migration-important-logs.sql` | Membatasi audit baru ke perubahan saldo penting dan menghentikan log tagihan/aset |
 | `supabase-migration-dynamic-savings-settings.sql` | Menambah pos tabungan dinamis, arsip aman, nama keluarga, dan pengaturan gajian |
+| `migrate-existing-usernames.mjs` | Migrasi satu kali akun email lama menjadi username tanpa mengganti UUID pengguna |
 | `vercel.json` | Security headers untuk Vercel |
 | `favicon.svg` | Ikon aplikasi |
 
@@ -123,7 +124,7 @@ Publishable key/anon key memang dirancang untuk frontend dan boleh terlihat di
 browser ketika RLS aktif. Jangan pernah memasukkan **secret key** atau
 **service_role key** ke dalam `config.js`.
 
-## 3. Mengatur login dan URL
+## 3. Mengatur login username tanpa verifikasi
 
 Di Supabase, buka **Authentication** → **URL Configuration**.
 
@@ -138,8 +139,52 @@ Setelah memperoleh alamat Vercel, atur:
 - **Site URL**: `https://nama-project.vercel.app`
 - **Redirect URLs**: `https://nama-project.vercel.app/**`
 
-Secara default Supabase dapat meminta konfirmasi email setelah pendaftaran.
-Untuk penggunaan pribadi, sebaiknya fitur konfirmasi email tetap diaktifkan.
+Di Supabase, buka **Authentication** → **Sign In / Providers** → **Email**.
+Pastikan **Confirm Email** dinonaktifkan. Pengaturan ini wajib agar pendaftaran
+username langsung menghasilkan sesi login dan tidak mencoba mengirim email
+konfirmasi. Email sintetis hanya dipakai sebagai identitas internal Supabase
+dan tidak pernah diminta atau ditampilkan pada form aplikasi.
+
+Supabase Auth tidak menyediakan login username bawaan. Aplikasi mengubah
+username secara lokal menjadi identitas internal berbentuk
+`username@users.keuangan-kita.invalid`. Jangan memakai domain ini sebagai
+alamat email sungguhan.
+
+Pemulihan password dilakukan manual oleh admin melalui Supabase. Jangan
+memasukkan `service_role` key ke `config.js` atau kode frontend.
+
+### Migrasi dua akun email lama
+
+Migrasi ini mempertahankan UUID `auth.users.id`, sehingga transaksi, saldo,
+role, room, dan data lama tidak berubah. Jangan menghapus dan membuat ulang
+akun lama.
+
+1. Pastikan kedua akun lama sudah keluar dari aplikasi.
+2. Ambil **service_role key** dari pengaturan API Supabase. Kunci ini hanya
+   dipakai sementara di terminal dan tidak boleh dimasukkan ke GitHub.
+3. Jalankan pratinjau dari folder proyek (contoh PowerShell). Belum ada data
+   yang diubah pada langkah ini:
+
+```powershell
+$env:SUPABASE_URL="https://PROJECT-ID.supabase.co"
+$env:SUPABASE_SERVICE_ROLE_KEY="SERVICE-ROLE-KEY"
+node .\migrate-existing-usernames.mjs "email-lama-1@gmail.com=alyuza" "email-lama-2@gmail.com=refirifkiya"
+```
+
+4. Periksa email, username, dan UUID yang ditampilkan. Jika sudah benar,
+   jalankan perintah yang sama dengan tambahan `--apply`:
+
+```powershell
+node .\migrate-existing-usernames.mjs --apply "email-lama-1@gmail.com=alyuza" "email-lama-2@gmail.com=refirifkiya"
+Remove-Item Env:\SUPABASE_SERVICE_ROLE_KEY
+```
+
+5. Setelah muncul pesan berhasil, login kembali memakai `alyuza` atau
+   `refirifkiya` dengan password lama. Script aman dijalankan ulang untuk
+   menyelesaikan pembaruan tabel profil jika koneksi sempat terputus.
+
+Frontend tetap menerima email pada halaman Masuk selama masa transisi. Form
+Daftar hanya menerima username.
 
 ## 4. Mencoba secara lokal
 
@@ -190,7 +235,7 @@ tetap kosong karena ini website statis.
 1. Pengguna pertama mendaftar dan login.
 2. Pilih **Buat ruang baru**.
 3. Salin kode undangan 12 karakter yang muncul di sidebar.
-4. Anggota lain mendaftar menggunakan email masing-masing.
+4. Anggota lain mendaftar menggunakan username unik masing-masing.
 5. Anggota memilih **Gabung keluarga** dan memasukkan kode tersebut.
 6. Room master membuka **Kelola anggota** untuk menetapkan role keluarga.
 

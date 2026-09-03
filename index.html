@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Pencatatan keuangan bersama untuk seluruh anggota keluarga." />
     <meta name="theme-color" content="#173f33" />
-    <meta name="app-version" content="21" />
+    <meta name="app-version" content="22" />
     <title>Keuangan Kita</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=21" />
+    <link rel="stylesheet" href="./styles.css?v=22" />
   </head>
   <body>
     <div id="configError" class="config-error hidden">
@@ -30,15 +30,16 @@
 
         <form id="authForm" class="auth-form">
           <label>
-            <span>Email</span>
-            <input id="authEmail" type="email" autocomplete="email" placeholder="nama@email.com" required />
+            <span id="authIdentifierLabel">Username atau email</span>
+            <input id="authIdentifier" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="320" placeholder="Masukkan username" required />
+            <small id="authIdentifierHint" class="auth-field-hint">Email lama tetap dapat dipakai selama proses migrasi.</small>
           </label>
           <label>
             <span>Password</span>
             <input id="authPassword" type="password" autocomplete="current-password" minlength="6" placeholder="Minimal 6 karakter" required />
           </label>
           <button id="authSubmit" class="button primary full" type="submit">Masuk</button>
-          <button id="forgotPassword" class="text-button" type="button">Lupa password?</button>
+          <small class="auth-recovery-note">Lupa password? Hubungi pengelola aplikasi untuk reset manual.</small>
         </form>
 
         <div class="security-note">
@@ -109,7 +110,7 @@
           <div class="user-info">
             <div class="user-name-row"><strong id="userName">Pengguna</strong><button id="editUserNameButton" class="name-edit-button" type="button" aria-label="Edit nama pengguna" title="Edit nama">✎</button></div>
             <span id="userRole" class="user-role">None</span>
-            <small id="userEmail"></small>
+            <small id="userUsername"></small>
           </div>
           <button id="logoutButton" class="logout-button" type="button" aria-label="Keluar dari akun"><span class="logout-icon">↪</span><span class="logout-label">Keluar</span></button>
         </div>
@@ -459,6 +460,6 @@
     </dialog>
 
     <div id="toastContainer" class="toast-container" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=21"></script>
+    <script type="module" src="./app.js?v=22"></script>
   </body>
 </html>

@@ -41,6 +41,8 @@ const incomeCategories = ["Gaji", "Bonus", "Usaha", "Investasi", "Hadiah", "Lain
 const outcomeCategories = ["Makan & minum", "Tagihan", "Transportasi", "Kesehatan", "Kecantikan", "Belanja", "Hiburan", "Rumah tangga", "Lainnya"];
 const chartColors = ["#bd5a58", "#d6a84d", "#3f806b", "#728e60", "#b97891", "#8069a8", "#d07c4f", "#68889c", "#8a918c"];
 const today = new Date().toISOString().slice(0, 10);
+const authUsernameDomain = "users.keuangan-kita.invalid";
+const usernamePattern = /^[a-z0-9](?:[a-z0-9._-]{1,28}[a-z0-9])?$/;
 
 const isConfigured =
   SUPABASE_URL.startsWith("https://") &&
@@ -227,7 +229,6 @@ function bindEvents() {
   $("#loginTab").addEventListener("click", () => setAuthMode("login"));
   $("#registerTab").addEventListener("click", () => setAuthMode("register"));
   $("#authForm").addEventListener("submit", submitAuth);
-  $("#forgotPassword").addEventListener("click", resetPassword);
   $("#createHouseholdForm").addEventListener("submit", createHousehold);
   $("#joinHouseholdForm").addEventListener("submit", joinHousehold);
   $("#onboardingLogout").addEventListener("click", logout);
@@ -359,7 +360,12 @@ function setAuthMode(mode) {
   $("#loginTab").classList.toggle("active", mode === "login");
   $("#registerTab").classList.toggle("active", mode === "register");
   $("#authSubmit").textContent = mode === "login" ? "Masuk" : "Buat akun";
-  $("#forgotPassword").classList.toggle("hidden", mode === "register");
+  $("#authIdentifierLabel").textContent = mode === "login" ? "Username atau email" : "Username";
+  $("#authIdentifier").placeholder = mode === "login" ? "Masukkan username" : "Contoh: alyuza";
+  $("#authIdentifier").maxLength = mode === "login" ? 320 : 30;
+  $("#authIdentifierHint").textContent = mode === "login"
+    ? "Email lama tetap dapat dipakai selama proses migrasi."
+    : "Gunakan 3–30 huruf kecil, angka, titik, garis bawah, atau tanda hubung.";
   $("#authPassword").autocomplete = mode === "login" ? "current-password" : "new-password";
 }
 
@@ -367,8 +373,17 @@ async function submitAuth(event) {
   event.preventDefault();
   if (!supabase) return;
 
-  const email = $("#authEmail").value.trim().toLowerCase();
+  const identifier = $("#authIdentifier").value.trim().toLowerCase();
   const password = $("#authPassword").value;
+  const username = identifier.includes("@") ? "" : normalizeUsername(identifier);
+
+  if (state.authMode === "register" && !isValidUsername(username)) {
+    showToast("Username harus 3–30 karakter, diawali dan diakhiri huruf/angka.", "error");
+    $("#authIdentifier").focus();
+    return;
+  }
+
+  const email = identifier.includes("@") ? identifier : usernameToAuthEmail(username);
   setButtonBusy($("#authSubmit"), true, state.authMode === "login" ? "Memproses…" : "Membuat akun…");
 
   if (state.authMode === "login") {
@@ -378,34 +393,24 @@ async function submitAuth(event) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: window.location.origin },
+      options: { data: { username } },
     });
     if (error) {
       showToast(translateAuthError(error.message), "error");
     } else if (!data.session) {
-      showToast("Akun dibuat. Periksa email untuk melakukan konfirmasi.");
+      const duplicateUsername = Array.isArray(data.user?.identities) && data.user.identities.length === 0;
+      showToast(
+        duplicateUsername
+          ? "Username sudah digunakan."
+          : "Akun dibuat, tetapi login langsung belum aktif. Nonaktifkan Confirm Email di Supabase lalu konfirmasi akun ini dari admin.",
+        "error",
+      );
     } else {
-      showToast("Akun berhasil dibuat.");
+      showToast("Akun berhasil dibuat dan langsung masuk.");
     }
   }
 
   setButtonBusy($("#authSubmit"), false);
-}
-
-async function resetPassword() {
-  if (!supabase) return;
-  const email = $("#authEmail").value.trim().toLowerCase();
-  if (!email) {
-    showToast("Isi alamat email terlebih dahulu.", "error");
-    $("#authEmail").focus();
-    return;
-  }
-
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin,
-  });
-  if (error) showToast(translateAuthError(error.message), "error");
-  else showToast("Tautan reset password sudah dikirim ke email.");
 }
 
 async function saveNewPassword(event) {
@@ -482,12 +487,13 @@ function showScreen(screen) {
 
 function fillProfile() {
   const email = state.user.email ?? "";
-  const fallbackName = email.split("@")[0] || "Pengguna";
+  const username = usernameFromEmail(email);
+  const fallbackName = username || "Pengguna";
   const currentMember = state.householdMembers.find((member) => member.user_id === state.user.id);
   const name = currentMember?.display_name || state.household.display_name || fallbackName;
   $("#userName").textContent = name;
   $("#userRole").textContent = currentMember?.family_role || "None";
-  $("#userEmail").textContent = email;
+  $("#userUsername").textContent = username ? `@${username}` : "";
   $("#userAvatar").textContent = name.slice(0, 1).toUpperCase();
   $("#sidebarHousehold").textContent = state.household.name;
   $("#mobileHouseholdName").textContent = state.household.name;
@@ -551,7 +557,7 @@ function canManageTransaction(transaction) {
 
 function openUserNameDialog() {
   const email = state.user.email ?? "";
-  const fallbackName = email.split("@")[0] || "Pengguna";
+  const fallbackName = usernameFromEmail(email) || "Pengguna";
   const currentMember = state.householdMembers.find((member) => member.user_id === state.user.id);
   $("#userNameInput").value = currentMember?.display_name || state.household.display_name || fallbackName;
   openModal($("#userNameDialog"));
@@ -776,7 +782,7 @@ function renderMembersList() {
         <div class="member-management-avatar ${memberColorClass(member)}">${escapeHtml(member.display_name.slice(0, 1).toUpperCase())}</div>
         <div class="member-management-info">
           <div><strong>${escapeHtml(member.display_name)}</strong>${isMaster ? "<b>Room master</b>" : ""}</div>
-          <span>${escapeHtml(member.email)}</span>
+          <span>@${escapeHtml(usernameFromEmail(member.email))}</span>
           <small>${escapeHtml(memberRoleLabel(member))} · Saldo ${formatRupiah(balance)}</small>
         </div>
         <div class="member-management-actions">
@@ -1374,7 +1380,7 @@ function renderLogs() {
 
   container.innerHTML = filteredLogs.map((log) => {
     const member = memberById(log.user_id);
-    const fallbackName = log.user_id === state.user?.id ? (state.user.email?.split("@")[0] || "Pengguna") : "Pengguna";
+    const fallbackName = log.user_id === state.user?.id ? (usernameFromEmail(state.user.email) || "Pengguna") : "Pengguna";
     const actorName = member?.display_name || fallbackName;
     const role = memberColorClass(member);
     return `
@@ -1480,7 +1486,7 @@ function transactionDetailsHtml(item) {
 
 function transactionDisplayName(item) {
   const member = transactionMember(item);
-  const fallbackName = item.user_id === state.user?.id ? (state.user.email?.split("@")[0] || "Pengguna") : "Pengguna";
+  const fallbackName = item.user_id === state.user?.id ? (usernameFromEmail(state.user.email) || "Pengguna") : "Pengguna";
   return member?.display_name || fallbackName;
 }
 
@@ -2615,11 +2621,29 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function normalizeUsername(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isValidUsername(value) {
+  const username = normalizeUsername(value);
+  return username.length >= 3 && username.length <= 30 && usernamePattern.test(username);
+}
+
+function usernameToAuthEmail(username) {
+  return `${normalizeUsername(username)}@${authUsernameDomain}`;
+}
+
+function usernameFromEmail(email) {
+  return String(email || "").trim().toLowerCase().split("@")[0];
+}
+
 function translateAuthError(message) {
   const lower = message.toLowerCase();
-  if (lower.includes("invalid login credentials")) return "Email atau password salah.";
-  if (lower.includes("email not confirmed")) return "Email belum dikonfirmasi. Periksa kotak masukmu.";
-  if (lower.includes("already registered")) return "Email sudah terdaftar.";
+  if (lower.includes("invalid login credentials")) return "Username atau password salah.";
+  if (lower.includes("email not confirmed")) return "Akun belum diaktifkan. Hubungi admin untuk mengaktifkannya.";
+  if (lower.includes("already registered") || lower.includes("already been registered")) return "Username sudah digunakan.";
+  if (lower.includes("rate limit") || lower.includes("too many requests")) return "Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.";
   if (lower.includes("password")) return "Password minimal 6 karakter.";
   return message;
 }
