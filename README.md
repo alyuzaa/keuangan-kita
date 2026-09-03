@@ -24,6 +24,7 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 - Form tambah/edit tagihan tampil sebagai dialog tersendiri seperti form Income/Outcome dan tidak menempel di bagian bawah layar.
 - Setiap akun hanya dapat mengelola tagihan saldonya sendiri dan tetap dapat melihat tagihan anggota lain.
 - Riwayat otomatis membuka bulan berjalan dan dapat difilter berdasarkan jenis, bulan, serta setiap pencatat.
+- Riwayat dapat diubah antara detail per transaksi dan akumulasi per hari; tampilan harian hanya memunculkan tanggal yang memiliki transaksi.
 - Room master dapat mengubah atau menghapus transaksi siapa pun; anggota lain hanya dapat mengubah transaksi yang mereka catat sendiri.
 - Room master dapat menghapus akses anggota setelah verifikasi `HAPUS` dan saldo anggota menjadi Rp0. Riwayat anggota tetap dipertahankan.
 - Room master dapat mengganti nama keluarga dari tombol pensil di bagian identitas room.

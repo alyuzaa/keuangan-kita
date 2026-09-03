@@ -23,6 +23,7 @@ const state = {
   transactionFilter: "all",
   transactionMemberFilter: "all",
   transactionMonth: currentMonthKey,
+  transactionView: "transactions",
   logsMonth: currentMonthKey,
   adjustmentOperator: "add",
   editingTransactionId: null,
@@ -293,6 +294,14 @@ function bindEvents() {
       $$(".filter-tabs button").forEach((item) => item.classList.toggle("active", item === button));
       renderTransactions();
       renderHistoryChart();
+    });
+  });
+
+  $$('[data-history-view]').forEach((button) => {
+    button.addEventListener("click", () => {
+      state.transactionView = button.dataset.historyView;
+      $$('[data-history-view]').forEach((item) => item.classList.toggle("active", item === button));
+      renderTransactions();
     });
   });
 
@@ -1148,23 +1157,39 @@ function renderTransactionMonthOptions() {
 }
 
 function renderTransactions() {
+  const isDailyView = state.transactionView === "daily";
+  const dailyType = state.transactionFilter === "income" ? "income" : "outcome";
   const filtered = state.transactions.filter((item) => {
-    const matchesType = state.transactionFilter === "all" || item.type === state.transactionFilter;
+    const matchesType = isDailyView
+      ? item.type === dailyType
+      : state.transactionFilter === "all" || item.type === state.transactionFilter;
     const matchesMonth = state.transactionMonth === "all" || item.date.startsWith(state.transactionMonth);
     const matchesMember = state.transactionMemberFilter === "all" || String(item.user_id) === state.transactionMemberFilter;
     return matchesType && matchesMonth && matchesMember;
   });
   const container = $("#transactionsTable");
+  $("#historyListTitle").textContent = isDailyView
+    ? `Total ${dailyType === "income" ? "income" : "pengeluaran"} per hari`
+    : "Detail transaksi";
 
   if (!filtered.length) {
     const filteredByMonth = state.transactionMonth !== "all";
     container.innerHTML = emptyStateHtml(
       "⇄",
-      filteredByMonth ? "Belum ada transaksi" : "Belum ada transaksi",
-      filteredByMonth ? "Tidak ada transaksi pada bulan yang dipilih." : "Income dan outcome yang kalian catat akan muncul di sini.",
+      isDailyView
+        ? `Belum ada ${dailyType === "income" ? "pemasukan" : "pengeluaran"}`
+        : "Belum ada transaksi",
+      filteredByMonth
+        ? `Tidak ada ${isDailyView ? (dailyType === "income" ? "pemasukan" : "pengeluaran") : "transaksi"} pada bulan yang dipilih.`
+        : "Income dan outcome yang kalian catat akan muncul di sini.",
       "income",
     );
     bindDynamicActions();
+    return;
+  }
+
+  if (isDailyView) {
+    renderDailyTransactions(container, filtered, dailyType);
     return;
   }
 
@@ -1206,6 +1231,54 @@ function renderTransactions() {
       }
     });
   });
+}
+
+function renderDailyTransactions(container, transactions, type) {
+  const grouped = new Map();
+
+  transactions.forEach((item) => {
+    const date = String(item.date).slice(0, 10);
+    if (!grouped.has(date)) {
+      grouped.set(date, {
+        date,
+        total: 0,
+        count: 0,
+        categories: new Map(),
+      });
+    }
+
+    const day = grouped.get(date);
+    const amount = Number(item.amount) || 0;
+    day.total += amount;
+    day.count += 1;
+    day.categories.set(item.category, (day.categories.get(item.category) || 0) + amount);
+  });
+
+  const days = [...grouped.values()].sort((a, b) => b.date.localeCompare(a.date));
+  const isIncome = type === "income";
+
+  container.innerHTML = `
+    <div class="daily-summary-list">
+      ${days.map((day) => {
+        const categories = [...day.categories.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([category, amount]) => `<span>${escapeHtml(category)} <b>${formatRupiah(amount)}</b></span>`)
+          .join("");
+        return `
+          <article class="daily-summary-row">
+            <div class="daily-summary-date">
+              <span>${formatWeekday(day.date)}</span>
+              <strong>${formatDate(day.date, true)}</strong>
+              <small>${day.count} transaksi</small>
+            </div>
+            <div class="daily-summary-categories" aria-label="Rincian kategori">${categories}</div>
+            <div class="daily-summary-total">
+              <span>Total ${isIncome ? "income" : "pengeluaran"}</span>
+              <strong class="${isIncome ? "positive" : "negative"}">${isIncome ? "+" : "−"}${formatRupiah(day.total)}</strong>
+            </div>
+          </article>`;
+      }).join("")}
+    </div>`;
 }
 
 function renderHistoryChart() {
@@ -2474,6 +2547,10 @@ function formatDate(date, includeYear = false) {
     month: "short",
     ...(includeYear ? { year: "numeric" } : {}),
   });
+}
+
+function formatWeekday(date) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString("id-ID", { weekday: "long" });
 }
 
 function formatBillingMonth(date) {

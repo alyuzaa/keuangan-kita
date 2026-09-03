@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Pencatatan keuangan bersama untuk seluruh anggota keluarga." />
     <meta name="theme-color" content="#173f33" />
-    <meta name="app-version" content="24" />
+    <meta name="app-version" content="25" />
     <title>Keuangan Kita</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=24" />
+    <link rel="stylesheet" href="./styles.css?v=25" />
   </head>
   <body>
     <div id="configError" class="config-error hidden">
@@ -200,6 +200,25 @@
               </div>
               <div id="historyChartContent"></div>
             </section>
+            <div class="history-list-toolbar">
+              <span id="historyListTitle">Detail transaksi</span>
+              <div class="history-view-tabs" role="group" aria-label="Tampilan riwayat">
+                <button class="active" data-history-view="transactions" type="button" aria-label="Tampilkan per transaksi" title="Per transaksi">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="5" cy="6" r="1.5"></circle>
+                    <circle cx="5" cy="12" r="1.5"></circle>
+                    <circle cx="5" cy="18" r="1.5"></circle>
+                    <path d="M9 6h10M9 12h10M9 18h10"></path>
+                  </svg>
+                </button>
+                <button data-history-view="daily" type="button" aria-label="Tampilkan total per hari" title="Per hari">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+                    <path d="M8 3v4M16 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
             <div id="transactionsTable" class="data-table"></div>
           </article>
         </section>
@@ -459,6 +478,6 @@
     </dialog>
 
     <div id="toastContainer" class="toast-container" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=24"></script>
+    <script type="module" src="./app.js?v=25"></script>
   </body>
 </html>
