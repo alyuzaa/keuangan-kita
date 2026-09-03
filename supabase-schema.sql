@@ -2004,11 +2004,15 @@ notify pgrst, 'reload schema';
 begin;
 
 alter table public.households
-  add column if not exists payday_enabled boolean not null default true,
-  add column if not exists payday_day smallint not null default 10;
+  add column if not exists payday_enabled boolean not null default false,
+  add column if not exists payday_day smallint;
+alter table public.households
+  alter column payday_enabled set default false,
+  alter column payday_day drop not null,
+  alter column payday_day set default null;
 alter table public.households drop constraint if exists households_payday_day_check;
 alter table public.households
-  add constraint households_payday_day_check check (payday_day between 1 and 31);
+  add constraint households_payday_day_check check (payday_day is null or payday_day between 1 and 31);
 
 create table if not exists public.savings_accounts (
   id uuid primary key default gen_random_uuid(),
@@ -2037,9 +2041,7 @@ insert into public.savings_accounts (household_id, name, include_in_net_worth, l
 select household.id, seed.name, seed.include_in_net_worth, seed.legacy_key, seed.sort_order, household.created_by
 from public.households as household
 cross join (values
-  ('Tabungan bersama'::text, true, 'savings'::text, 0::smallint),
-  ('Tabungan istri'::text, true, 'wife_savings'::text, 1::smallint),
-  ('Pendidikan'::text, false, 'education'::text, 2::smallint)
+  ('Tabungan pribadi'::text, true, 'savings'::text, 0::smallint)
 ) as seed(name, include_in_net_worth, legacy_key, sort_order)
 on conflict (household_id, legacy_key) do nothing;
 
@@ -2052,9 +2054,7 @@ as $$
 begin
   insert into public.savings_accounts (household_id, name, include_in_net_worth, legacy_key, sort_order, created_by)
   values
-    (new.id, 'Tabungan bersama', true, 'savings', 0, new.created_by),
-    (new.id, 'Tabungan istri', true, 'wife_savings', 1, new.created_by),
-    (new.id, 'Pendidikan', false, 'education', 2, new.created_by)
+    (new.id, 'Tabungan pribadi', true, 'savings', 0, new.created_by)
   on conflict (household_id, legacy_key) do nothing;
   return new;
 end;
@@ -2591,8 +2591,11 @@ declare member_household_id uuid;
 begin
   select household_id into member_household_id from public.household_members where user_id = auth.uid();
   if member_household_id is null or not public.is_household_master(member_household_id) then raise exception 'Hanya room master yang dapat mengatur tanggal gajian'; end if;
-  if coalesce(salary_day, 0) not between 1 and 31 then raise exception 'Tanggal gajian harus antara 1 dan 31'; end if;
-  update public.households set payday_enabled = coalesce(enabled, false), payday_day = salary_day where id = member_household_id;
+  if coalesce(enabled, false) and coalesce(salary_day, 0) not between 1 and 31 then raise exception 'Tanggal gajian harus antara 1 dan 31'; end if;
+  update public.households
+  set payday_enabled = coalesce(enabled, false),
+      payday_day = case when coalesce(enabled, false) then salary_day else null end
+  where id = member_household_id;
 end;
 $$;
 
@@ -2619,7 +2622,12 @@ begin
       and old.member_allocations is not distinct from new.member_allocations
       and old.savings_allocations is not distinct from new.savings_allocations then return new; end if;
   end if;
-  if tg_table_name not in ('transactions', 'balance_transfers', 'balance_adjustments') then
+  if tg_table_name = 'assets' and tg_op = 'UPDATE' then
+    if old.quantity is not distinct from new.quantity
+      and old.purchase_value is not distinct from new.purchase_value
+      and old.current_value is not distinct from new.current_value then return new; end if;
+  end if;
+  if tg_table_name not in ('transactions', 'assets', 'balance_transfers', 'balance_adjustments') then
     return case when tg_op = 'DELETE' then old else new end;
   end if;
   record_household_id := case when tg_op = 'DELETE' then old.household_id else new.household_id end;
@@ -2628,6 +2636,10 @@ begin
   if tg_table_name = 'transactions' then
     record_entity_type := 'transaction'; record_action := case when tg_op = 'INSERT' then 'create' else lower(tg_op) end;
     record_summary := 'Transaksi ' || (case when tg_op = 'DELETE' then old.category else new.category end)
+      || case tg_op when 'INSERT' then ' ditambahkan' when 'UPDATE' then ' diubah' else ' dihapus' end;
+  elsif tg_table_name = 'assets' then
+    record_entity_type := 'asset'; record_action := case when tg_op = 'INSERT' then 'create' else lower(tg_op) end;
+    record_summary := 'Aset ' || (case when tg_op = 'DELETE' then old.name else new.name end)
       || case tg_op when 'INSERT' then ' ditambahkan' when 'UPDATE' then ' diubah' else ' dihapus' end;
   elsif tg_table_name = 'balance_transfers' then
     record_entity_type := 'transfer'; record_action := 'transfer'; record_summary := 'Transfer saldo dicatat';
@@ -2643,6 +2655,11 @@ begin
   return case when tg_op = 'DELETE' then old else new end;
 end;
 $$;
+
+drop trigger if exists audit_assets_trigger on public.assets;
+create trigger audit_assets_trigger
+after insert or update or delete on public.assets
+for each row execute function public.write_finance_audit_log();
 
 alter table public.savings_accounts enable row level security;
 drop policy if exists "Members can read savings accounts" on public.savings_accounts;

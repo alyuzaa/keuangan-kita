@@ -616,8 +616,8 @@ async function saveHouseholdName(event) {
 
 function openPaydaySettingsDialog() {
   if (!isRoomMaster()) return;
-  $("#paydayEnabled").checked = state.household.payday_enabled !== false;
-  $("#paydayDay").value = Number(state.household.payday_day || 10);
+  $("#paydayEnabled").checked = state.household.payday_enabled === true;
+  $("#paydayDay").value = state.household.payday_day ?? "";
   updatePaydaySettingsFields();
   openModal($("#paydaySettingsDialog"));
 }
@@ -633,7 +633,7 @@ async function savePaydaySettings(event) {
   event.preventDefault();
   if (!isRoomMaster()) return;
   const enabled = $("#paydayEnabled").checked;
-  const day = enabled ? Number($("#paydayDay").value) : Number(state.household.payday_day || 10);
+  const day = enabled ? Number($("#paydayDay").value) : null;
   if (enabled && (!Number.isInteger(day) || day < 1 || day > 31)) {
     showToast("Tanggal gajian harus antara 1–31.", "error");
     return;
@@ -1331,12 +1331,27 @@ function transactionFinancialSignature(record = {}) {
 
 function isImportantFinancialLog(log) {
   if (log.entity_type === "transfer" || log.entity_type === "adjustment") return true;
+  if (log.entity_type === "asset") {
+    if (log.action !== "update") return true;
+    const before = log.details?.before;
+    const after = log.details?.after;
+    if (!before || !after) return true;
+    return assetFinancialSignature(before) !== assetFinancialSignature(after);
+  }
   if (log.entity_type !== "transaction") return false;
   if (log.action !== "update") return true;
   const before = log.details?.before;
   const after = log.details?.after;
   if (!before || !after) return true;
   return transactionFinancialSignature(before) !== transactionFinancialSignature(after);
+}
+
+function assetFinancialSignature(record = {}) {
+  return JSON.stringify({
+    quantity: Number(record.quantity || 0),
+    purchase_value: Number(record.purchase_value || 0),
+    current_value: Number(record.current_value || 0),
+  });
 }
 
 function importantFinancialLogs() {
@@ -1369,8 +1384,8 @@ function renderLogs() {
     container.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">≡</div>
-        <h4>Belum ada perubahan saldo</h4>
-        <p>${importantLogs.length ? "Tidak ada perubahan keuangan pada bulan yang dipilih." : "Income, outcome, transfer, dan penyesuaian saldo penting akan tampil di sini."}</p>
+        <h4>Belum ada perubahan keuangan</h4>
+        <p>${importantLogs.length ? "Tidak ada perubahan keuangan pada bulan yang dipilih." : "Income, outcome, transfer, penyesuaian saldo, dan perubahan nilai aset akan tampil di sini."}</p>
       </div>`;
     return;
   }
@@ -1413,7 +1428,14 @@ function logDetail(log) {
     return `${escapeHtml(record.category || "Transaksi")} · ${formatRupiah(record.amount)}`;
   }
   if (log.entity_type === "asset") {
-    return `${escapeHtml(record.name || "Aset")} · ${formatRupiah(record.current_value)}`;
+    const before = details.before;
+    const after = details.after;
+    const name = after?.name || before?.name || "Aset";
+    if (log.action === "update" && before && after) {
+      return `${escapeHtml(name)} · ${formatRupiah(before.current_value)} → ${formatRupiah(after.current_value)}`;
+    }
+    const prefix = log.action === "delete" ? "−" : "+";
+    return `${escapeHtml(name)} · ${prefix}${formatRupiah(record.current_value)}`;
   }
   if (log.entity_type === "family_member") {
     return escapeHtml(details.display_name || details.family_role || "Perubahan anggota keluarga");
@@ -2479,8 +2501,8 @@ function getNextPaydayInfo(referenceDate = new Date()) {
   const year = referenceDate.getFullYear();
   const month = referenceDate.getMonth();
   const day = referenceDate.getDate();
-  const enabled = state.household?.payday_enabled !== false;
-  const configuredDay = Math.min(31, Math.max(1, Number(state.household?.payday_day || 10)));
+  const enabled = state.household?.payday_enabled === true;
+  const configuredDay = Math.min(31, Math.max(1, Number(state.household?.payday_day || 1)));
   const dateInMonth = (targetYear, targetMonth) => new Date(
     targetYear,
     targetMonth,

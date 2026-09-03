@@ -11,14 +11,14 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 - Kode undangan 12 karakter untuk menghubungkan anggota keluarga.
 - Room master dapat memberi role `Suami`, `Istri`, `Anak`, `None`, atau nama role bebas tanpa mengubah hak akses sistem.
 - Income dibagi ke saldo pribadi anggota dan pos tabungan dinamis.
-- Room master dapat menambah, mengganti nama, mengatur penyertaan dalam total kekayaan, dan mengarsipkan maksimal 12 pos tabungan aktif.
+- Ruang baru dimulai dengan `Tabungan pribadi` dan baris tetap `Nilai aset`; room master dapat menambah, mengganti nama, mengatur penyertaan dalam total kekayaan, dan mengarsipkan maksimal 12 pos tabungan aktif.
 - Pos tabungan hanya dapat diarsipkan saat saldonya Rp0 dan setelah verifikasi `HAPUS`; riwayat lama tetap mempertahankan identitas posnya.
 - Saldo pribadi boleh menjadi minus sebagai catatan utang/defisit setelah konfirmasi. Seluruh pos tabungan tetap tidak boleh minus.
 - Transfer saldo antar-pos tanpa mencatat income/outcome.
 - Penyesuaian saldo dapat dilakukan dengan mengetik saldo akhir atau nominal penambahan/pengurangan, disertai alasan dan jejak perubahan.
 - Pencatatan emas, tanah, perhiasan, kendaraan, properti, dan aset lainnya.
 - Dashboard total kekayaan, saldo tersedia, nilai aset, dan arus bulan berjalan.
-- Room master dapat mengaktifkan tanggal gajian 1–31 atau menonaktifkannya. Jika nonaktif, rekomendasi harian dihitung sampai tanggal 1 bulan berikutnya.
+- Tanggal gajian nonaktif secara default. Room master dapat mengaktifkan tanggal 1–31; jika tetap nonaktif, rekomendasi harian dihitung sampai tanggal 1 bulan berikutnya.
 - Rekomendasi harian tetap menyisihkan tagihan yang belum dibayar dan tidak membatasi nominal Outcome.
 - Tagihan bulanan dengan nominal, tanggal berlangganan, serta checklist pembayaran yang otomatis dimulai ulang setiap bulan.
 - Form tambah/edit tagihan tampil sebagai dialog tersendiri seperti form Income/Outcome dan tidak menempel di bagian bawah layar.
@@ -30,8 +30,8 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 - Baris riwayat dapat diketuk untuk melihat detail tanpa masuk ke mode edit; ketuk area di luar kotak untuk menutup detail.
 - Item Riwayat terbaru di Beranda dapat diketuk untuk membuka detail transaksi tanpa meninggalkan Beranda.
 - Donut chart kategori pada mobile mengikuti filter Riwayat yang aktif, dengan warna teks legenda yang sama seperti segmen chart.
-- Edit/hapus transaksi dan aset, serta tab Logs perubahan saldo penting yang dapat difilter per bulan.
-- Logs hanya menampilkan Income, Outcome, Transfer, dan Penyesuaian saldo; aktivitas tagihan, checklist pembayaran, aset, dan profil tidak memenuhi daftar tampilan.
+- Edit/hapus transaksi dan aset, serta tab Logs perubahan keuangan penting yang dapat difilter per bulan.
+- Logs menampilkan Income, Outcome, Transfer, Penyesuaian saldo, serta penambahan, penghapusan, dan perubahan nilai aset; aktivitas tagihan, checklist pembayaran, dan profil tidak ditampilkan.
 - Row Level Security (RLS): pengguna tidak bisa membaca household lain.
 - Tampilan responsif untuk HP dan desktop.
 
@@ -49,6 +49,7 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 | `supabase-migration-family-members.sql` | Upgrade anggota dinamis, role keluarga, saldo pribadi, izin room master, dan saldo defisit |
 | `supabase-migration-important-logs.sql` | Membatasi audit baru ke perubahan saldo penting dan menghentikan log tagihan/aset |
 | `supabase-migration-dynamic-savings-settings.sql` | Menambah pos tabungan dinamis, arsip aman, nama keluarga, dan pengaturan gajian |
+| `supabase-migration-defaults-assets-logs.sql` | Mengatur default ruang baru dan mengaktifkan Logs perubahan aset |
 | `vercel.json` | Security headers untuk Vercel |
 | `favicon.svg` | Ikon aplikasi |
 
@@ -105,6 +106,13 @@ setelah migration versi 20. Migration ini membuat tiga pos awal dari data lama:
 `Pendidikan` tetap ditampilkan tetapi tidak dihitung. Saldo dan riwayat lama
 tidak dipindah atau dihapus. Jalankan hanya isi tab migration ini sekali; file
 aman dijalankan ulang jika proses sebelumnya terhenti.
+
+Untuk versi 24, jalankan `supabase-migration-defaults-assets-logs.sql` setelah
+migration versi 21. Migration ini hanya mengubah default untuk ruang yang
+dibuat setelah migration dijalankan: gajian nonaktif dan satu pos awal
+`Tabungan pribadi`. Pos serta saldo milik ruang lama tidak dihapus atau
+diganti. Migration juga mulai mencatat penambahan, penghapusan, dan perubahan
+nilai aset pada Logs.
 
 ## 2. Menyambungkan frontend ke Supabase
 
