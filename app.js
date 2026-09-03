@@ -22,6 +22,7 @@ const state = {
   transactionFilter: "all",
   transactionMemberFilter: "all",
   transactionMonth: currentMonthKey,
+  logsMonth: currentMonthKey,
   adjustmentOperator: "add",
   editingTransactionId: null,
   editingAssetId: null,
@@ -101,6 +102,7 @@ async function handleSession(session) {
     state.monthlyBills = [];
     state.monthlyBillPayments = [];
     state.transactionMonth = currentMonthKey;
+    state.logsMonth = currentMonthKey;
     showScreen("auth");
     setBusy(false);
     return;
@@ -277,6 +279,10 @@ function bindEvents() {
     state.transactionMonth = event.target.value;
     renderTransactions();
     renderHistoryChart();
+  });
+  $("#logsMonthFilter").addEventListener("change", (event) => {
+    state.logsMonth = event.target.value;
+    renderLogs();
   });
 
   [
@@ -682,6 +688,7 @@ function renderAll() {
   renderTransactions();
   renderHistoryChart();
   renderAssets();
+  renderLogMonthOptions();
   renderLogs();
   switchView(state.activeView);
 }
@@ -694,9 +701,8 @@ function renderMemberFilters() {
   const validFilters = new Set(["all", ...members.map((member) => String(member.user_id))]);
   if (!validFilters.has(state.transactionMemberFilter)) state.transactionMemberFilter = "all";
   $("#memberFilterTabs").innerHTML = `
-    <span>Pencatat</span>
     <button class="${state.transactionMemberFilter === "all" ? "active" : ""}" data-member-filter="all" type="button">Semua</button>
-    ${members.map((member) => `<button class="${state.transactionMemberFilter === String(member.user_id) ? "active" : ""}" data-member-filter="${member.user_id}" type="button">${escapeHtml(memberRoleLabel(member) === "None" ? member.display_name : `${memberRoleLabel(member)} · ${member.display_name}`)}${member.is_active ? "" : " · Dihapus"}</button>`).join("")}`;
+    ${members.map((member) => `<button class="${state.transactionMemberFilter === String(member.user_id) ? "active" : ""}" data-member-filter="${member.user_id}" type="button">${escapeHtml(memberRoleLabel(member))}${member.is_active ? "" : " · Dihapus"}</button>`).join("")}`;
 
   $$("#memberFilterTabs button").forEach((button) => {
     button.addEventListener("click", () => {
@@ -988,8 +994,8 @@ function renderHistoryChart() {
   const isIncome = chartType === "income";
   const selectedMember = memberById(state.transactionMemberFilter);
   const scopeLabel = selectedMember
-    ? `${memberRoleLabel(selectedMember)} · ${selectedMember.display_name}`
-    : "Semua pencatat";
+    ? memberRoleLabel(selectedMember)
+    : "Semua";
 
   $("#historyChartEyebrow").textContent = isIncome ? "RINGKASAN INCOME" : "RINGKASAN OUTCOME";
   $("#historyChartScope").textContent = scopeLabel;
@@ -1067,19 +1073,72 @@ function renderAssets() {
   bindDynamicActions();
 }
 
+function transactionFinancialSignature(record = {}) {
+  const memberAllocations = Object.fromEntries(
+    Object.entries(record.member_allocations || {}).sort(([left], [right]) => left.localeCompare(right)),
+  );
+  return JSON.stringify({
+    type: record.type ?? null,
+    amount: Number(record.amount || 0),
+    date: record.date ?? null,
+    source: record.source ?? null,
+    source_member_id: record.source_member_id ?? null,
+    husband_allocation: Number(record.husband_allocation || 0),
+    wife_allocation: Number(record.wife_allocation || 0),
+    savings_allocation: Number(record.savings_allocation || 0),
+    wife_savings_allocation: Number(record.wife_savings_allocation || 0),
+    education_allocation: Number(record.education_allocation || 0),
+    member_allocations: memberAllocations,
+  });
+}
+
+function isImportantFinancialLog(log) {
+  if (log.entity_type === "transfer" || log.entity_type === "adjustment") return true;
+  if (log.entity_type !== "transaction") return false;
+  if (log.action !== "update") return true;
+  const before = log.details?.before;
+  const after = log.details?.after;
+  if (!before || !after) return true;
+  return transactionFinancialSignature(before) !== transactionFinancialSignature(after);
+}
+
+function importantFinancialLogs() {
+  return state.auditLogs.filter(isImportantFinancialLog);
+}
+
+function logMonthKey(log) {
+  const date = new Date(log.created_at);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function renderLogMonthOptions() {
+  const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  const logMonths = [...new Set([currentMonthKey, ...importantFinancialLogs().map(logMonthKey).filter(Boolean)])]
+    .sort((left, right) => right.localeCompare(left));
+  $("#logsMonthFilter").innerHTML = `<option value="all">Semua bulan</option>${logMonths.map((value) => {
+    const [year, month] = value.split("-").map(Number);
+    return `<option value="${value}">${monthNames[month - 1]} ${year}</option>`;
+  }).join("")}`;
+  if (state.logsMonth !== "all" && !logMonths.includes(state.logsMonth)) state.logsMonth = currentMonthKey;
+  $("#logsMonthFilter").value = state.logsMonth;
+}
+
 function renderLogs() {
   const container = $("#logsList");
-  if (!state.auditLogs.length) {
+  const importantLogs = importantFinancialLogs();
+  const filteredLogs = importantLogs.filter((log) => state.logsMonth === "all" || logMonthKey(log) === state.logsMonth);
+  if (!filteredLogs.length) {
     container.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">≡</div>
-        <h4>Belum ada log</h4>
-        <p>Aktivitas baru akan tercatat setelah pembaruan database dipasang.</p>
+        <h4>Belum ada perubahan saldo</h4>
+        <p>${importantLogs.length ? "Tidak ada perubahan keuangan pada bulan yang dipilih." : "Income, outcome, transfer, dan penyesuaian saldo penting akan tampil di sini."}</p>
       </div>`;
     return;
   }
 
-  container.innerHTML = state.auditLogs.map((log) => {
+  container.innerHTML = filteredLogs.map((log) => {
     const member = memberById(log.user_id);
     const fallbackName = log.user_id === state.user?.id ? (state.user.email?.split("@")[0] || "Pengguna") : "Pengguna";
     const actorName = member?.display_name || fallbackName;

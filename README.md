@@ -26,7 +26,8 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 - Baris riwayat dapat diketuk untuk melihat detail tanpa masuk ke mode edit; ketuk area di luar kotak untuk menutup detail.
 - Item Riwayat terbaru di Beranda dapat diketuk untuk membuka detail transaksi tanpa meninggalkan Beranda.
 - Donut chart kategori pada mobile mengikuti filter Riwayat yang aktif, dengan warna teks legenda yang sama seperti segmen chart.
-- Edit/hapus transaksi dan aset, serta tab Logs yang tidak dapat diubah.
+- Edit/hapus transaksi dan aset, serta tab Logs perubahan saldo penting yang dapat difilter per bulan.
+- Logs hanya menampilkan Income, Outcome, Transfer, dan Penyesuaian saldo; aktivitas tagihan, checklist pembayaran, aset, dan profil tidak memenuhi daftar tampilan.
 - Row Level Security (RLS): pengguna tidak bisa membaca household lain.
 - Tampilan responsif untuk HP dan desktop.
 
@@ -42,6 +43,7 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 | `supabase-migration-transfers-logs.sql` | Upgrade instalasi lama untuk transfer, penyesuaian, anti-minus, dan Logs |
 | `supabase-migration-monthly-bills.sql` | Upgrade instalasi lama untuk tagihan bulanan, checklist, audit, dan izin pemilik |
 | `supabase-migration-family-members.sql` | Upgrade anggota dinamis, role keluarga, saldo pribadi, izin room master, dan saldo defisit |
+| `supabase-migration-important-logs.sql` | Membatasi audit baru ke perubahan saldo penting dan menghentikan log tagihan/aset |
 | `vercel.json` | Security headers untuk Vercel |
 | `favicon.svg` | Ikon aplikasi |
 
@@ -85,6 +87,11 @@ untuk versi 19. Data lama tetap dipertahankan: pembuat room lama diberi label
 `Suami`, anggota lama diberi label `Istri`, sedangkan anggota baru memakai
 role `None` sampai diubah oleh room master. Jalankan hanya tab SQL migration
 tersebut, bukan semua tab SQL Editor sekaligus.
+
+Untuk versi 20, lanjutkan dengan `supabase-migration-important-logs.sql`.
+Migration ini tidak menghapus log lama dari database. Frontend menyembunyikan
+log yang tidak berkaitan dengan perubahan saldo, sementara aktivitas tagihan
+dan aset baru tidak lagi menambah audit log.
 
 ## 2. Menyambungkan frontend ke Supabase
 

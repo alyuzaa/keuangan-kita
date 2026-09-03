@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Pencatatan keuangan bersama untuk seluruh anggota keluarga." />
     <meta name="theme-color" content="#173f33" />
-    <meta name="app-version" content="19" />
+    <meta name="app-version" content="20" />
     <title>Keuangan Kita</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=19" />
+    <link rel="stylesheet" href="./styles.css?v=20" />
   </head>
   <body>
     <div id="configError" class="config-error hidden">
@@ -182,7 +182,6 @@
                     <button data-filter="outcome" type="button">Outcome</button>
                   </div>
                   <div id="memberFilterTabs" class="member-filter-tabs" aria-label="Filter pencatat transaksi">
-                    <span>Pencatat</span>
                     <button class="active" data-member-filter="all" type="button">Semua</button>
                   </div>
                 </div>
@@ -198,7 +197,7 @@
             <section id="historyChart" class="history-chart" aria-labelledby="historyChartEyebrow">
               <div class="history-chart-heading">
                 <span id="historyChartEyebrow">RINGKASAN OUTCOME</span>
-                <small id="historyChartScope">Semua pencatat</small>
+                <small id="historyChartScope">Semua</small>
               </div>
               <div id="historyChartContent"></div>
             </section>
@@ -218,7 +217,12 @@
           <article class="content-panel panel logs-panel">
             <div class="logs-heading">
               <div><p>JEJAK PERUBAHAN</p><h2>Logs aktivitas</h2></div>
-              <span>Catatan tidak dapat diedit atau dihapus.</span>
+              <div class="logs-toolbar">
+                <span>Hanya perubahan saldo penting.</span>
+                <select id="logsMonthFilter" class="month-filter" aria-label="Pilih bulan logs">
+                  <option value="all">Semua bulan</option>
+                </select>
+              </div>
             </div>
             <div id="logsList" class="logs-list"></div>
           </article>
@@ -401,6 +405,6 @@
     </dialog>
 
     <div id="toastContainer" class="toast-container" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=19"></script>
+    <script type="module" src="./app.js?v=20"></script>
   </body>
 </html>
