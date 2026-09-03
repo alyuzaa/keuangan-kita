@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Pencatatan keuangan pribadi untuk suami dan istri." />
+    <meta name="description" content="Pencatatan keuangan bersama untuk seluruh anggota keluarga." />
     <meta name="theme-color" content="#173f33" />
-    <meta name="app-version" content="18" />
+    <meta name="app-version" content="19" />
     <title>Keuangan Kita</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=18" />
+    <link rel="stylesheet" href="./styles.css?v=19" />
   </head>
   <body>
     <div id="configError" class="config-error hidden">
@@ -57,7 +57,7 @@
         </div>
         <p class="eyebrow">LANGKAH TERAKHIR</p>
         <h1>Buat atau gabung ruang keluarga</h1>
-        <p>Pengguna pertama membuat ruang keluarga. Pasangan kemudian bergabung menggunakan kode undangan.</p>
+        <p>Pengguna pertama menjadi room master. Anggota keluarga lain kemudian bergabung menggunakan kode undangan.</p>
 
         <div class="choice-grid">
           <form id="createHouseholdForm" class="choice-card">
@@ -70,8 +70,8 @@
 
           <form id="joinHouseholdForm" class="choice-card">
             <div class="choice-icon gold">#</div>
-            <h2>Gabung pasangan</h2>
-            <p>Masukkan kode dari akun pasanganmu.</p>
+            <h2>Gabung keluarga</h2>
+            <p>Masukkan kode dari room master keluargamu.</p>
             <label><span>Kode undangan</span><input id="inviteCodeInput" class="code-input" type="text" minlength="12" maxlength="12" placeholder="12 KARAKTER" required /></label>
             <button class="button secondary full" type="submit">Gabung ruang keluarga</button>
           </form>
@@ -96,17 +96,18 @@
         </nav>
 
         <section class="invite-panel">
-          <span class="mini-label">KODE PASANGAN</span>
+          <span class="mini-label">KODE KELUARGA</span>
           <strong id="sidebarInviteCode">—</strong>
           <button id="copyInviteCode" type="button">Salin kode undangan</button>
         </section>
 
-        <div class="privacy-panel"><span>✓</span><div><strong>Data Private</strong><small>Hanya anggota keluarga.</small></div></div>
+        <div class="privacy-panel"><span>✓</span><div><strong>Data Private</strong><small>Hanya anggota keluarga.</small><button id="manageMembersButton" class="manage-members-button hidden" type="button">Kelola anggota</button></div></div>
 
         <div class="user-panel">
           <div id="userAvatar" class="avatar">U</div>
           <div class="user-info">
             <div class="user-name-row"><strong id="userName">Pengguna</strong><button id="editUserNameButton" class="name-edit-button" type="button" aria-label="Edit nama pengguna" title="Edit nama">✎</button></div>
+            <span id="userRole" class="user-role">None</span>
             <small id="userEmail"></small>
           </div>
           <button id="logoutButton" class="logout-button" type="button" aria-label="Keluar dari akun"><span class="logout-icon">↪</span><span class="logout-label">Keluar</span></button>
@@ -143,7 +144,7 @@
                 <div><span>Tabungan istri</span><strong id="wifeSavingsBalance">Rp0</strong></div>
                 <div><span>Nilai aset</span><strong id="assetValue">Rp0</strong></div>
               </div>
-              <div class="wealth-footer">Total mencakup saldo suami, saldo istri, tabungan bersama, tabungan istri, dan nilai aset. Pendidikan tidak dihitung.</div>
+              <div class="wealth-footer">Total mencakup seluruh saldo pribadi anggota, tabungan bersama, tabungan istri, dan nilai aset. Pendidikan tidak dihitung.</div>
             </article>
 
             <article class="month-card panel">
@@ -180,11 +181,9 @@
                     <button data-filter="income" type="button">Income</button>
                     <button data-filter="outcome" type="button">Outcome</button>
                   </div>
-                  <div class="member-filter-tabs" aria-label="Filter pencatat transaksi">
+                  <div id="memberFilterTabs" class="member-filter-tabs" aria-label="Filter pencatat transaksi">
                     <span>Pencatat</span>
                     <button class="active" data-member-filter="all" type="button">Semua</button>
-                    <button data-member-filter="owner" type="button">Suami</button>
-                    <button data-member-filter="member" type="button">Istri</button>
                   </div>
                 </div>
                 <select id="transactionMonthFilter" class="month-filter" aria-label="Pilih bulan riwayat">
@@ -230,7 +229,7 @@
     <dialog id="transactionDialog" class="modal">
       <form id="transactionForm" method="dialog">
         <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
-        <header><h2 id="transactionDialogTitle">Catat income</h2><p id="transactionDialogCopy">Bagi pemasukan untuk suami, istri, tabungan bersama, tabungan istri, dan pendidikan.</p></header>
+        <header><h2 id="transactionDialogTitle">Catat income</h2><p id="transactionDialogCopy">Bagi pemasukan untuk anggota keluarga dan pos bersama.</p></header>
         <div class="form-grid">
           <label class="full"><span>Nominal</span><div class="money-field"><b>Rp</b><input id="transactionAmount" inputmode="numeric" placeholder="0" required /></div></label>
           <label><span>Tanggal</span><input id="transactionDate" type="date" required /></label>
@@ -239,14 +238,13 @@
 
           <section id="incomeAllocation" class="allocation-form full">
             <div class="allocation-form-title"><div><strong>Pembagian income</strong><span>Total harus sama dengan nominal income.</span></div><b id="allocationRemaining">Pas</b></div>
-            <label><span>Untuk suami</span><div class="money-field small"><b>Rp</b><input id="husbandAllocation" inputmode="numeric" placeholder="0" /></div></label>
-            <label><span>Untuk istri</span><div class="money-field small"><b>Rp</b><input id="wifeAllocation" inputmode="numeric" placeholder="0" /></div></label>
+            <div id="memberAllocationFields" class="member-allocation-fields"></div>
             <label><span>Tabungan bersama</span><div class="money-field small"><b>Rp</b><input id="savingsAllocation" inputmode="numeric" placeholder="0" /></div></label>
             <label><span>Tabungan istri</span><div class="money-field small"><b>Rp</b><input id="wifeSavingsAllocation" inputmode="numeric" placeholder="0" /></div></label>
             <label><span>Pendidikan</span><div class="money-field small"><b>Rp</b><input id="educationAllocation" inputmode="numeric" placeholder="0" /></div></label>
           </section>
 
-          <label id="outcomeSourceGroup" class="full hidden"><span>Sumber dana</span><select id="outcomeSource"><option value="husband">Uang suami</option><option value="wife">Uang istri</option><option value="savings">Tabungan bersama</option><option value="wife_savings">Tabungan istri</option><option value="education">Pendidikan</option></select></label>
+          <label id="outcomeSourceGroup" class="full hidden"><span>Sumber dana</span><select id="outcomeSource"></select></label>
           <button id="saveTransactionButton" class="button primary full submit-button" type="submit">Simpan transaksi</button>
         </div>
       </form>
@@ -369,7 +367,40 @@
       </form>
     </dialog>
 
+    <dialog id="membersDialog" class="modal members-modal">
+      <div class="members-content">
+        <button class="modal-close" type="button" aria-label="Tutup">×</button>
+        <header><span class="detail-type">RUANG KELUARGA</span><h2>Anggota keluarga</h2><p id="membersDialogCopy">Role keluarga adalah label yang tampil pada akun dan riwayat.</p></header>
+        <div id="membersList" class="members-list"></div>
+        <p class="members-note">Room master mengatur role dan akses anggota. Menghapus akses tidak menghapus riwayat transaksi.</p>
+      </div>
+    </dialog>
+
+    <dialog id="memberRoleDialog" class="modal small-modal">
+      <form id="memberRoleForm" method="dialog">
+        <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
+        <header><h2>Ubah role keluarga</h2><p id="memberRoleCopy">Pilih role atau tulis nama role sendiri.</p></header>
+        <div class="form-grid">
+          <label class="full"><span>Role</span><select id="memberRolePreset"><option>None</option><option>Suami</option><option>Istri</option><option>Anak</option><option value="custom">Ketik sendiri</option></select></label>
+          <label id="memberCustomRoleGroup" class="full hidden"><span>Nama role</span><input id="memberCustomRole" type="text" minlength="1" maxlength="30" placeholder="Contoh: Kakak" /></label>
+          <button id="saveMemberRoleButton" class="button primary full submit-button" type="submit">Simpan role</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="removeMemberDialog" class="modal small-modal danger-modal">
+      <form id="removeMemberForm" method="dialog">
+        <button class="modal-close" value="cancel" type="button" aria-label="Tutup">×</button>
+        <header><h2>Hapus akses anggota</h2><p id="removeMemberCopy"></p></header>
+        <div id="removeMemberBalance" class="balance-hint full"></div>
+        <div class="form-grid remove-member-form-grid">
+          <label class="full"><span>Ketik <b>HAPUS</b> untuk verifikasi</span><input id="removeMemberConfirmation" type="text" autocomplete="off" placeholder="HAPUS" required /></label>
+          <button id="confirmRemoveMemberButton" class="button danger full submit-button" type="submit" disabled>Hapus akses</button>
+        </div>
+      </form>
+    </dialog>
+
     <div id="toastContainer" class="toast-container" aria-live="polite"></div>
-    <script type="module" src="./app.js?v=18"></script>
+    <script type="module" src="./app.js?v=19"></script>
   </body>
 </html>

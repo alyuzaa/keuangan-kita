@@ -1,16 +1,17 @@
 # Keuangan Kita — HTML, CSS, JavaScript + Supabase
 
-Website pencatatan keuangan pribadi untuk suami dan istri. Frontend dibuat
+Website pencatatan keuangan bersama untuk anggota keluarga. Frontend dibuat
 dengan HTML, CSS, dan JavaScript murni. Login dan database memakai Supabase.
 Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 
 ## Fitur
 
 - Login dan pendaftaran dengan email + password.
-- Dua akun terpisah dalam satu ruang keluarga.
-- Kode undangan 12 karakter untuk menghubungkan akun pasangan.
-- Income dibagi menjadi uang suami, uang istri, tabungan bersama, tabungan istri, dan pendidikan.
-- Outcome memilih sumber dana dan dilindungi dari saldo minus, termasuk kategori Kecantikan.
+- Hingga delapan akun aktif dalam satu ruang keluarga.
+- Kode undangan 12 karakter untuk menghubungkan anggota keluarga.
+- Room master dapat memberi role `Suami`, `Istri`, `Anak`, `None`, atau nama role bebas tanpa mengubah hak akses sistem.
+- Income dibagi ke saldo pribadi anggota, tabungan bersama, tabungan istri, dan pendidikan.
+- Saldo pribadi boleh menjadi minus sebagai catatan utang/defisit setelah konfirmasi. Tabungan bersama, tabungan istri, dan pendidikan tetap tidak boleh minus.
 - Transfer saldo antar-pos tanpa mencatat income/outcome.
 - Penyesuaian saldo dapat dilakukan dengan mengetik saldo akhir atau nominal penambahan/pengurangan, disertai alasan dan jejak perubahan.
 - Pencatatan emas, tanah, perhiasan, kendaraan, properti, dan aset lainnya.
@@ -18,8 +19,10 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 - Countdown gajian tanggal 10 dan rekomendasi harian setelah menyisihkan tagihan yang belum dibayar.
 - Tagihan bulanan dengan nominal, tanggal berlangganan, serta checklist pembayaran yang otomatis dimulai ulang setiap bulan.
 - Form tambah/edit tagihan tampil sebagai dialog tersendiri seperti form Income/Outcome dan tidak menempel di bagian bawah layar.
-- Setiap akun hanya dapat mengelola tagihan saldonya sendiri dan tetap dapat melihat tagihan pasangan.
-- Riwayat otomatis membuka bulan berjalan dan dapat difilter berdasarkan jenis, bulan, serta pencatat (suami/istri).
+- Setiap akun hanya dapat mengelola tagihan saldonya sendiri dan tetap dapat melihat tagihan anggota lain.
+- Riwayat otomatis membuka bulan berjalan dan dapat difilter berdasarkan jenis, bulan, serta setiap pencatat.
+- Room master dapat mengubah atau menghapus transaksi siapa pun; anggota lain hanya dapat mengubah transaksi yang mereka catat sendiri.
+- Room master dapat menghapus akses anggota setelah verifikasi `HAPUS` dan saldo anggota menjadi Rp0. Riwayat anggota tetap dipertahankan.
 - Baris riwayat dapat diketuk untuk melihat detail tanpa masuk ke mode edit; ketuk area di luar kotak untuk menutup detail.
 - Item Riwayat terbaru di Beranda dapat diketuk untuk membuka detail transaksi tanpa meninggalkan Beranda.
 - Donut chart kategori pada mobile mengikuti filter Riwayat yang aktif, dengan warna teks legenda yang sama seperti segmen chart.
@@ -38,6 +41,7 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 | `supabase-schema.sql` | Schema lengkap: tabel, functions, anti-minus, audit, grants, dan RLS |
 | `supabase-migration-transfers-logs.sql` | Upgrade instalasi lama untuk transfer, penyesuaian, anti-minus, dan Logs |
 | `supabase-migration-monthly-bills.sql` | Upgrade instalasi lama untuk tagihan bulanan, checklist, audit, dan izin pemilik |
+| `supabase-migration-family-members.sql` | Upgrade anggota dinamis, role keluarga, saldo pribadi, izin room master, dan saldo defisit |
 | `vercel.json` | Security headers untuk Vercel |
 | `favicon.svg` | Ikon aplikasi |
 
@@ -51,6 +55,7 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 6. Pastikan tabel berikut muncul di **Table Editor**:
    - `households`
    - `household_members`
+   - `household_member_profiles`
    - `transactions`
    - `assets`
    - `balance_transfers`
@@ -74,6 +79,12 @@ wajib untuk versi yang memiliki menu tagihan bulanan. Checklist pembayaran
 hanya menjadi penanda; pembayaran tetap dicatat manual melalui Outcome.
 File migration versi terbaru aman dijalankan ulang untuk memperbaiki instalasi
 tagihan yang sempat berhenti di tengah atau menghasilkan respons HTTP 400.
+
+Terakhir, jalankan `supabase-migration-family-members.sql`. Migration ini wajib
+untuk versi 19. Data lama tetap dipertahankan: pembuat room lama diberi label
+`Suami`, anggota lama diberi label `Istri`, sedangkan anggota baru memakai
+role `None` sampai diubah oleh room master. Jalankan hanya tab SQL migration
+tersebut, bukan semua tab SQL Editor sekaligus.
 
 ## 2. Menyambungkan frontend ke Supabase
 
@@ -154,18 +165,18 @@ npx vercel
 Ikuti pertanyaan di terminal. Pilih project baru dan biarkan pengaturan build
 tetap kosong karena ini website statis.
 
-## 6. Cara menghubungkan akun suami dan istri
+## 6. Cara menghubungkan anggota keluarga
 
 1. Pengguna pertama mendaftar dan login.
 2. Pilih **Buat ruang baru**.
 3. Salin kode undangan 12 karakter yang muncul di sidebar.
-4. Pasangan mendaftar menggunakan emailnya sendiri.
-5. Pasangan memilih **Gabung pasangan** dan memasukkan kode tersebut.
-6. Kedua akun sekarang melihat dan mengubah data keluarga yang sama.
+4. Anggota lain mendaftar menggunakan email masing-masing.
+5. Anggota memilih **Gabung keluarga** dan memasukkan kode tersebut.
+6. Room master membuka **Kelola anggota** untuk menetapkan role keluarga.
 
-Jangan membagikan kode undangan kepada orang lain. Setelah pasangan berhasil
-bergabung, database otomatis menolak anggota ketiga. Setiap akun juga dibatasi
-hanya boleh bergabung dalam satu household.
+Jangan membagikan kode undangan kepada orang di luar keluarga. Satu room
+mendukung maksimal delapan anggota aktif dan setiap akun hanya dapat bergabung
+dalam satu household pada satu waktu.
 
 ## Keamanan
 

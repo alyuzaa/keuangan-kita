@@ -26,16 +26,16 @@ const state = {
   editingTransactionId: null,
   editingAssetId: null,
   editingMonthlyBillId: null,
-  activeMonthlyBillBalance: "husband",
+  activeMonthlyBillMemberId: null,
+  editingMemberRoleId: null,
+  removingMemberId: null,
   activeView: "dashboard",
   lockedScrollY: 0,
 };
 
 const incomeCategories = ["Gaji", "Bonus", "Usaha", "Investasi", "Hadiah", "Lainnya"];
 const outcomeCategories = ["Makan & minum", "Tagihan", "Transportasi", "Kesehatan", "Kecantikan", "Belanja", "Hiburan", "Rumah tangga", "Lainnya"];
-const balanceOptions = [
-  { key: "husband", label: "Uang suami" },
-  { key: "wife", label: "Uang istri" },
+const sharedBalanceOptions = [
   { key: "savings", label: "Tabungan bersama" },
   { key: "wife_savings", label: "Tabungan istri" },
   { key: "education", label: "Pendidikan" },
@@ -112,7 +112,7 @@ async function handleSession(session) {
 async function loadHousehold() {
   const { data, error } = await supabase
     .from("household_members")
-    .select("household_id, role, display_name, households!inner(id, name, invite_code)")
+    .select("household_id, role, display_name, households!inner(id, name, invite_code, created_by)")
     .eq("user_id", state.user.id)
     .maybeSingle();
 
@@ -156,8 +156,8 @@ async function loadFinanceData() {
       .eq("household_id", householdId)
       .order("created_at", { ascending: false }),
     supabase
-      .from("household_members")
-      .select("user_id, role, display_name")
+      .from("household_member_profiles")
+      .select("user_id, system_role, family_role, display_name, email, color_index, is_active, joined_at, removed_at")
       .eq("household_id", householdId),
     supabase
       .from("balance_transfers")
@@ -208,6 +208,7 @@ async function loadFinanceData() {
     state.auditLogs = logsResult.data ?? [];
     state.monthlyBills = billsResult.data ?? [];
     state.monthlyBillPayments = billPaymentsResult.data ?? [];
+    fillProfile();
     renderAll();
   }
   setBusy(false);
@@ -223,6 +224,7 @@ function bindEvents() {
   $("#onboardingLogout").addEventListener("click", logout);
   $("#logoutButton").addEventListener("click", logout);
   $("#editUserNameButton").addEventListener("click", openUserNameDialog);
+  $("#manageMembersButton").addEventListener("click", openMembersDialog);
   $("#copyInviteCode").addEventListener("click", copyInviteCode);
 
   $$(".nav-button").forEach((button) => {
@@ -247,6 +249,9 @@ function bindEvents() {
   $("#monthlyBillsDialog .modal-close").addEventListener("click", () => $("#monthlyBillsDialog").close());
   $("#monthlyBillsDialog").addEventListener("click", closeMonthlyBillsFromBackdrop);
   $("#monthlyBillFormDialog .modal-close").addEventListener("click", closeMonthlyBillForm);
+  $("#membersDialog .modal-close").addEventListener("click", () => $("#membersDialog").close());
+  $("#memberRoleDialog .modal-close").addEventListener("click", () => $("#memberRoleDialog").close());
+  $("#removeMemberDialog .modal-close").addEventListener("click", () => $("#removeMemberDialog").close());
   $("#transactionForm").addEventListener("submit", saveTransaction);
   $("#assetForm").addEventListener("submit", saveAsset);
   $("#passwordForm").addEventListener("submit", saveNewPassword);
@@ -254,6 +259,8 @@ function bindEvents() {
   $("#transferForm").addEventListener("submit", saveTransfer);
   $("#adjustmentForm").addEventListener("submit", saveAdjustment);
   $("#monthlyBillForm").addEventListener("submit", saveMonthlyBill);
+  $("#memberRoleForm").addEventListener("submit", saveMemberRole);
+  $("#removeMemberForm").addEventListener("submit", removeMember);
   $("#addMonthlyBillButton").addEventListener("click", () => openMonthlyBillForm());
   $$(".modal").forEach((dialog) => dialog.addEventListener("close", unlockPageScroll));
 
@@ -261,15 +268,6 @@ function bindEvents() {
     button.addEventListener("click", () => {
       state.transactionFilter = button.dataset.filter;
       $$(".filter-tabs button").forEach((item) => item.classList.toggle("active", item === button));
-      renderTransactions();
-      renderHistoryChart();
-    });
-  });
-
-  $$(".member-filter-tabs button").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.transactionMemberFilter = button.dataset.memberFilter;
-      $$(".member-filter-tabs button").forEach((item) => item.classList.toggle("active", item === button));
       renderTransactions();
       renderHistoryChart();
     });
@@ -283,8 +281,6 @@ function bindEvents() {
 
   [
     "#transactionAmount",
-    "#husbandAllocation",
-    "#wifeAllocation",
     "#savingsAllocation",
     "#wifeSavingsAllocation",
     "#educationAllocation",
@@ -295,10 +291,11 @@ function bindEvents() {
     "#adjustmentDelta",
     "#monthlyBillAmount",
   ].forEach((selector) => {
-    $(selector).addEventListener("input", (event) => {
+    $(selector)?.addEventListener("input", (event) => {
       const keepZero = selector === "#adjustmentNewBalance" || selector === "#adjustmentDelta";
-      event.target.value = keepZero
-        ? formatNumberInputIncludingZero(event.target.value)
+      event.target.value = selector === "#adjustmentNewBalance"
+        ? formatSignedNumberInput(event.target.value)
+        : keepZero ? formatNumberInputIncludingZero(event.target.value)
         : formatNumberInput(event.target.value);
       if (selector.includes("Allocation") || selector === "#transactionAmount") updateAllocationStatus();
       if (selector.startsWith("#asset")) updateAssetCalculation();
@@ -318,6 +315,13 @@ function bindEvents() {
   $("#inviteCodeInput").addEventListener("input", (event) => {
     event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
   });
+  $("#memberAllocationFields").addEventListener("input", (event) => {
+    if (!event.target.matches("[data-member-allocation]")) return;
+    event.target.value = formatNumberInput(event.target.value);
+    updateAllocationStatus();
+  });
+  $("#memberRolePreset").addEventListener("change", toggleCustomRoleField);
+  $("#removeMemberConfirmation").addEventListener("input", updateRemoveMemberButton);
 }
 
 function setAuthMode(mode) {
@@ -428,7 +432,7 @@ async function joinHousehold(event) {
   if (error) {
     showToast(error.message.includes("not found") ? "Kode undangan tidak ditemukan." : error.message, "error");
   } else {
-    showToast("Akun berhasil dihubungkan dengan pasangan.");
+    showToast("Akun berhasil bergabung ke ruang keluarga.");
     await loadHousehold();
   }
   setButtonBusy(button, false);
@@ -452,11 +456,48 @@ function fillProfile() {
   const currentMember = state.householdMembers.find((member) => member.user_id === state.user.id);
   const name = currentMember?.display_name || state.household.display_name || fallbackName;
   $("#userName").textContent = name;
+  $("#userRole").textContent = currentMember?.family_role || "None";
   $("#userEmail").textContent = email;
   $("#userAvatar").textContent = name.slice(0, 1).toUpperCase();
   $("#sidebarHousehold").textContent = state.household.name;
   $("#mobileHouseholdName").textContent = state.household.name;
   $("#sidebarInviteCode").textContent = state.household.invite_code;
+  $("#manageMembersButton").classList.toggle("hidden", !isRoomMaster());
+}
+
+function isRoomMaster() {
+  return state.household?.created_by === state.user?.id || state.household?.role === "owner";
+}
+
+function activeHouseholdMembers() {
+  return state.householdMembers
+    .filter((member) => member.is_active)
+    .sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at)));
+}
+
+function memberById(userId) {
+  return state.householdMembers.find((member) => String(member.user_id) === String(userId)) ?? null;
+}
+
+function memberRoleLabel(member) {
+  return member?.family_role?.trim() || "None";
+}
+
+function memberBalanceKey(userId) {
+  return `member:${userId}`;
+}
+
+function memberColorClass(member) {
+  return `member-color-${Number(member?.color_index || 0) % 8}`;
+}
+
+function memberBalanceLabel(member) {
+  const role = memberRoleLabel(member);
+  return role === "None" ? `Uang ${member?.display_name || "anggota"}` : `Uang ${role}`;
+}
+
+function canManageTransaction(transaction) {
+  return isRoomMaster() || String(transaction?.user_id) === String(state.user?.id);
 }
 
 function openUserNameDialog() {
@@ -492,6 +533,123 @@ async function saveUserName(event) {
   setButtonBusy(button, false);
 }
 
+function openMembersDialog() {
+  if (!isRoomMaster()) return;
+  renderMembersList();
+  openModal($("#membersDialog"));
+}
+
+function renderMembersList() {
+  const totals = getTotals();
+  $("#membersList").innerHTML = activeHouseholdMembers().map((member) => {
+    const isMaster = member.system_role === "owner" || String(state.household.created_by) === String(member.user_id);
+    const balance = Number(totals.memberBalances[String(member.user_id)] || 0);
+    return `
+      <article class="member-management-row">
+        <div class="member-management-avatar ${memberColorClass(member)}">${escapeHtml(member.display_name.slice(0, 1).toUpperCase())}</div>
+        <div class="member-management-info">
+          <div><strong>${escapeHtml(member.display_name)}</strong>${isMaster ? "<b>Room master</b>" : ""}</div>
+          <span>${escapeHtml(member.email)}</span>
+          <small>${escapeHtml(memberRoleLabel(member))} · Saldo ${formatRupiah(balance)}</small>
+        </div>
+        <div class="member-management-actions">
+          <button data-edit-member-role="${member.user_id}" type="button" aria-label="Ubah role ${escapeHtml(member.display_name)}">✎ Role</button>
+          ${String(member.user_id) !== String(state.user.id) ? `<button class="remove" data-remove-member="${member.user_id}" type="button" aria-label="Hapus akses ${escapeHtml(member.display_name)}">Hapus</button>` : ""}
+        </div>
+      </article>`;
+  }).join("");
+
+  $$('[data-edit-member-role]').forEach((button) => button.addEventListener("click", () => openMemberRoleDialog(button.dataset.editMemberRole)));
+  $$('[data-remove-member]').forEach((button) => button.addEventListener("click", () => openRemoveMemberDialog(button.dataset.removeMember)));
+}
+
+function openMemberRoleDialog(userId) {
+  if (!isRoomMaster()) return;
+  const member = memberById(userId);
+  if (!member?.is_active) return;
+  state.editingMemberRoleId = userId;
+  const presets = ["None", "Suami", "Istri", "Anak"];
+  const currentRole = memberRoleLabel(member);
+  $("#memberRoleCopy").textContent = `Role ini akan tampil untuk ${member.display_name} pada profil dan riwayat.`;
+  $("#memberRolePreset").value = presets.includes(currentRole) ? currentRole : "custom";
+  $("#memberCustomRole").value = presets.includes(currentRole) ? "" : currentRole;
+  toggleCustomRoleField();
+  openModal($("#memberRoleDialog"));
+}
+
+function toggleCustomRoleField() {
+  const custom = $("#memberRolePreset").value === "custom";
+  $("#memberCustomRoleGroup").classList.toggle("hidden", !custom);
+  $("#memberCustomRole").required = custom;
+}
+
+async function saveMemberRole(event) {
+  event.preventDefault();
+  const preset = $("#memberRolePreset").value;
+  const role = (preset === "custom" ? $("#memberCustomRole").value : preset).trim();
+  if (!role || role.length > 30) {
+    showToast("Role harus terdiri dari 1–30 karakter.", "error");
+    return;
+  }
+  const button = $("#saveMemberRoleButton");
+  setButtonBusy(button, true, "Menyimpan…");
+  const { error } = await supabase.rpc("set_member_family_role", {
+    target_user_id: state.editingMemberRoleId,
+    new_family_role: role,
+  });
+  if (error) {
+    showToast(error.message, "error");
+  } else {
+    $("#memberRoleDialog").close();
+    showToast("Role keluarga berhasil diperbarui.");
+    await loadFinanceData();
+    if ($("#membersDialog").open) renderMembersList();
+  }
+  setButtonBusy(button, false);
+}
+
+function openRemoveMemberDialog(userId) {
+  if (!isRoomMaster()) return;
+  const member = memberById(userId);
+  if (!member?.is_active || String(userId) === String(state.user.id)) return;
+  state.removingMemberId = userId;
+  $("#removeMemberConfirmation").value = "";
+  const balance = Number(getTotals().memberBalances[String(userId)] || 0);
+  $("#removeMemberCopy").textContent = `Akses ${member.display_name} akan dicabut, tetapi seluruh riwayatnya tetap tersimpan. Tindakan ini tidak menghapus akun login.`;
+  $("#removeMemberBalance").innerHTML = `<span>Saldo ${escapeHtml(member.display_name)}</span><strong class="${balance < 0 ? "negative" : ""}">${formatRupiah(balance)}</strong>`;
+  $("#removeMemberBalance").dataset.canRemove = String(balance === 0);
+  updateRemoveMemberButton();
+  openModal($("#removeMemberDialog"));
+}
+
+function updateRemoveMemberButton() {
+  const confirmed = $("#removeMemberConfirmation").value.trim().toUpperCase() === "HAPUS";
+  const zeroBalance = $("#removeMemberBalance").dataset.canRemove === "true";
+  $("#confirmRemoveMemberButton").disabled = !(confirmed && zeroBalance);
+  $("#removeMemberBalance").classList.toggle("warning", !zeroBalance);
+}
+
+async function removeMember(event) {
+  event.preventDefault();
+  const confirmation = $("#removeMemberConfirmation").value.trim().toUpperCase();
+  if (confirmation !== "HAPUS" || $("#removeMemberBalance").dataset.canRemove !== "true") return;
+  const button = $("#confirmRemoveMemberButton");
+  setButtonBusy(button, true, "Menghapus akses…");
+  const { error } = await supabase.rpc("remove_household_member", {
+    target_user_id: state.removingMemberId,
+    confirmation_text: confirmation,
+  });
+  if (error) {
+    showToast(error.message, "error");
+  } else {
+    $("#removeMemberDialog").close();
+    showToast("Akses anggota dihapus. Riwayat tetap tersimpan.");
+    await loadFinanceData();
+    if ($("#membersDialog").open) renderMembersList();
+  }
+  setButtonBusy(button, false);
+}
+
 async function copyInviteCode() {
   try {
     await navigator.clipboard.writeText(state.household.invite_code);
@@ -519,6 +677,7 @@ function switchView(view) {
 
 function renderAll() {
   renderDashboard();
+  renderMemberFilters();
   renderTransactionMonthOptions();
   renderTransactions();
   renderHistoryChart();
@@ -527,11 +686,31 @@ function renderAll() {
   switchView(state.activeView);
 }
 
+function renderMemberFilters() {
+  const transactionUserIds = new Set(state.transactions.map((item) => String(item.user_id)).filter(Boolean));
+  const members = state.householdMembers
+    .filter((member) => member.is_active || transactionUserIds.has(String(member.user_id)))
+    .sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at)));
+  const validFilters = new Set(["all", ...members.map((member) => String(member.user_id))]);
+  if (!validFilters.has(state.transactionMemberFilter)) state.transactionMemberFilter = "all";
+  $("#memberFilterTabs").innerHTML = `
+    <span>Pencatat</span>
+    <button class="${state.transactionMemberFilter === "all" ? "active" : ""}" data-member-filter="all" type="button">Semua</button>
+    ${members.map((member) => `<button class="${state.transactionMemberFilter === String(member.user_id) ? "active" : ""}" data-member-filter="${member.user_id}" type="button">${escapeHtml(memberRoleLabel(member) === "None" ? member.display_name : `${memberRoleLabel(member)} · ${member.display_name}`)}${member.is_active ? "" : " · Dihapus"}</button>`).join("")}`;
+
+  $$("#memberFilterTabs button").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.transactionMemberFilter = button.dataset.memberFilter;
+      $$("#memberFilterTabs button").forEach((item) => item.classList.toggle("active", item === button));
+      renderTransactions();
+      renderHistoryChart();
+    });
+  });
+}
+
 function getTotals() {
   let income = 0;
   let outcome = 0;
-  let husband = 0;
-  let wife = 0;
   let savings = 0;
   let wifeSavings = 0;
   let education = 0;
@@ -539,21 +718,42 @@ function getTotals() {
   let monthOutcome = 0;
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const memberBalances = Object.fromEntries(state.householdMembers.map((member) => [String(member.user_id), 0]));
+  const legacyOwner = state.householdMembers
+    .filter((member) => member.system_role === "owner")
+    .sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at)))[0];
+  const legacyMember = state.householdMembers
+    .filter((member) => member.system_role === "member")
+    .sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at)))[0];
+  const addMemberBalance = (userId, amount) => {
+    if (!userId) return;
+    const key = String(userId);
+    memberBalances[key] = Number(memberBalances[key] || 0) + Number(amount || 0);
+  };
+  const transferMemberId = (item, side) => {
+    const balance = item[`${side}_balance`];
+    if (balance === "member") return item[`${side}_member_id`];
+    if (balance === "husband") return legacyOwner?.user_id;
+    if (balance === "wife") return legacyMember?.user_id;
+    return null;
+  };
 
   state.transactions.forEach((item) => {
     const amount = Number(item.amount);
     if (item.type === "income") {
       income += amount;
-      husband += Number(item.husband_allocation);
-      wife += Number(item.wife_allocation);
+      Object.entries(item.member_allocations || {}).forEach(([userId, allocation]) => addMemberBalance(userId, allocation));
+      addMemberBalance(legacyOwner?.user_id, item.husband_allocation);
+      addMemberBalance(legacyMember?.user_id, item.wife_allocation);
       savings += Number(item.savings_allocation);
       wifeSavings += Number(item.wife_savings_allocation ?? 0);
       education += Number(item.education_allocation ?? 0);
       if (item.date.startsWith(monthKey)) monthIncome += amount;
     } else {
       outcome += amount;
-      if (item.source === "husband") husband -= amount;
-      if (item.source === "wife") wife -= amount;
+      if (item.source === "member") addMemberBalance(item.source_member_id, -amount);
+      if (item.source === "husband") addMemberBalance(legacyOwner?.user_id, -amount);
+      if (item.source === "wife") addMemberBalance(legacyMember?.user_id, -amount);
       if (item.source === "savings") savings -= amount;
       if (item.source === "wife_savings") wifeSavings -= amount;
       if (item.source === "education") education -= amount;
@@ -563,13 +763,11 @@ function getTotals() {
 
   state.transfers.forEach((item) => {
     const amount = Number(item.amount);
-    if (item.from_balance === "husband") husband -= amount;
-    if (item.from_balance === "wife") wife -= amount;
+    addMemberBalance(transferMemberId(item, "from"), -amount);
     if (item.from_balance === "savings") savings -= amount;
     if (item.from_balance === "wife_savings") wifeSavings -= amount;
     if (item.from_balance === "education") education -= amount;
-    if (item.to_balance === "husband") husband += amount;
-    if (item.to_balance === "wife") wife += amount;
+    addMemberBalance(transferMemberId(item, "to"), amount);
     if (item.to_balance === "savings") savings += amount;
     if (item.to_balance === "wife_savings") wifeSavings += amount;
     if (item.to_balance === "education") education += amount;
@@ -577,20 +775,23 @@ function getTotals() {
 
   state.adjustments.forEach((item) => {
     const delta = Number(item.delta);
-    if (item.balance_key === "husband") husband += delta;
-    if (item.balance_key === "wife") wife += delta;
+    if (item.balance_key === "member") addMemberBalance(item.member_user_id, delta);
+    if (item.balance_key === "husband") addMemberBalance(legacyOwner?.user_id, delta);
+    if (item.balance_key === "wife") addMemberBalance(legacyMember?.user_id, delta);
     if (item.balance_key === "savings") savings += delta;
     if (item.balance_key === "wife_savings") wifeSavings += delta;
     if (item.balance_key === "education") education += delta;
   });
 
   const assetValue = state.assets.reduce((sum, item) => sum + Number(item.current_value), 0);
-  const cash = husband + wife + savings + wifeSavings;
+  const personalCash = Object.values(memberBalances).reduce((sum, value) => sum + Number(value), 0);
+  const cash = personalCash + savings + wifeSavings;
   return {
     income,
     outcome,
-    husband,
-    wife,
+    husband: Number(memberBalances[String(legacyOwner?.user_id)] || 0),
+    wife: Number(memberBalances[String(legacyMember?.user_id)] || 0),
+    memberBalances,
     savings,
     wifeSavings,
     education,
@@ -613,19 +814,24 @@ function renderDashboard() {
   $("#monthIncome").textContent = formatRupiah(totals.monthIncome);
   $("#monthOutcome").textContent = formatRupiah(totals.monthOutcome);
   $("#monthDifference").textContent = formatRupiah(totals.monthIncome - totals.monthOutcome);
+  $("#totalWealth").classList.toggle("negative", totals.netWorth < 0);
   $("#paydayCountdown").innerHTML = `
     <span>Menuju gajian</span>
     <strong>${payday.days} hari lagi</strong>
     <small>${payday.date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}</small>`;
 
-  const allocations = [
-    { balanceKey: "husband", label: "Uang suami", value: totals.husband, icon: "♙", color: "sage" },
-    { balanceKey: "wife", label: "Uang istri", value: totals.wife, icon: "♡", color: "rose" },
-  ];
+  const memberIcons = ["♙", "♡", "◇", "○", "☆", "♧", "△", "□"];
+  const allocations = activeHouseholdMembers().map((member) => ({
+    member,
+    balanceKey: memberBalanceKey(member.user_id),
+    label: memberBalanceLabel(member),
+    value: Number(totals.memberBalances[String(member.user_id)] || 0),
+    icon: memberIcons[Number(member.color_index || 0) % memberIcons.length],
+  }));
   const max = Math.max(...allocations.map((item) => Math.max(item.value, 0)), 1);
 
   $("#allocationList").innerHTML = allocations.map((item) => {
-    const unpaidBills = unpaidBillsForBalance(item.balanceKey);
+    const unpaidBills = unpaidBillsForMember(item.member.user_id);
     const unpaidTotal = unpaidBills.reduce((sum, bill) => sum + Number(bill.amount), 0);
     const spendableBalance = Math.max(Number(item.value) - unpaidTotal, 0);
     const dailyRecommendation = Math.floor(spendableBalance / payday.days);
@@ -633,11 +839,11 @@ function renderDashboard() {
       ? `${unpaidBills.length} tagihan belum dibayar · ${formatRupiah(unpaidTotal)}`
       : "Ketuk untuk mengatur tagihan bulanan";
     return `
-    <article class="allocation-item allocation-item-button" data-open-monthly-bills="${item.balanceKey}" role="button" tabindex="0" aria-label="Buka tagihan bulanan ${item.label}">
-      <div class="allocation-icon ${item.color}">${item.icon}</div>
+    <article class="allocation-item allocation-item-button ${item.value < 0 ? "deficit" : ""}" data-open-monthly-bills="${item.member.user_id}" role="button" tabindex="0" aria-label="Buka tagihan bulanan ${item.label}">
+      <div class="allocation-icon ${memberColorClass(item.member)}">${item.icon}</div>
       <div class="allocation-data">
-        <div><span>${item.label}</span><strong>${formatRupiah(item.value)}</strong></div>
-        <progress class="balance-progress" max="${max}" value="${Math.max(item.value, 0)}" aria-label="Perbandingan saldo ${item.label}"></progress>
+        <div><span>${escapeHtml(item.label)} · ${escapeHtml(item.member.display_name)}</span><strong class="${item.value < 0 ? "negative" : ""}">${formatRupiah(item.value)}${item.value < 0 ? " · Defisit" : ""}</strong></div>
+        <progress class="balance-progress ${memberColorClass(item.member)}" max="${max}" value="${Math.max(item.value, 0)}" aria-label="Perbandingan saldo ${escapeHtml(item.label)}"></progress>
         <div class="daily-spending"><span>Rekomendasi pengeluaran per hari</span><strong>${formatRupiah(dailyRecommendation)}</strong></div>
         <small class="monthly-bill-summary${unpaidTotal > Number(item.value) ? " warning" : ""}">${billSummary}</small>
       </div>
@@ -707,8 +913,7 @@ function renderTransactions() {
   const filtered = state.transactions.filter((item) => {
     const matchesType = state.transactionFilter === "all" || item.type === state.transactionFilter;
     const matchesMonth = state.transactionMonth === "all" || item.date.startsWith(state.transactionMonth);
-    const member = transactionMember(item);
-    const matchesMember = state.transactionMemberFilter === "all" || member?.role === state.transactionMemberFilter;
+    const matchesMember = state.transactionMemberFilter === "all" || String(item.user_id) === state.transactionMemberFilter;
     return matchesType && matchesMonth && matchesMember;
   });
   const container = $("#transactionsTable");
@@ -733,12 +938,12 @@ function renderTransactions() {
           <div class="transaction-icon ${item.type}">${item.type === "income" ? "↙" : "↗"}</div>
           ${transactionDetailsHtml(item)}
         </div>
-        <span>${item.type === "income" ? "Suami · Istri · Tabungan bersama · Tabungan istri · Pendidikan" : sourceLabel(item.source)}</span>
+        <span>${item.type === "income" ? incomeAllocationSummary(item) : sourceLabel(item.source, item.source_member_id)}</span>
         <strong class="${item.type === "income" ? "positive" : "negative"}">${item.type === "income" ? "+" : "−"}${formatRupiah(item.amount)}</strong>
-        <div class="row-actions">
+        ${canManageTransaction(item) ? `<div class="row-actions">
           <button class="edit-button" data-edit-transaction="${item.id}" type="button" aria-label="Edit transaksi" title="Edit">✎</button>
           <button class="delete-button" data-delete-transaction="${item.id}" type="button" aria-label="Hapus transaksi" title="Hapus">×</button>
-        </div>
+        </div>` : `<div class="row-actions row-actions-readonly" title="Hanya pencatat atau room master yang dapat mengubah">◌</div>`}
       </div>
     `).join("")}
   `;
@@ -770,8 +975,7 @@ function renderHistoryChart() {
   const relevant = state.transactions.filter((item) => {
     const matchesType = item.type === chartType;
     const matchesMonth = state.transactionMonth === "all" || item.date.startsWith(state.transactionMonth);
-    const member = transactionMember(item);
-    const matchesMember = state.transactionMemberFilter === "all" || member?.role === state.transactionMemberFilter;
+    const matchesMember = state.transactionMemberFilter === "all" || String(item.user_id) === state.transactionMemberFilter;
     return matchesType && matchesMonth && matchesMember;
   });
 
@@ -782,9 +986,10 @@ function renderHistoryChart() {
     .sort((a, b) => b.value - a.value);
   const total = categories.reduce((sum, item) => sum + item.value, 0);
   const isIncome = chartType === "income";
-  const scopeLabel = state.transactionMemberFilter === "owner"
-    ? "Suami"
-    : state.transactionMemberFilter === "member" ? "Istri" : "Semua pencatat";
+  const selectedMember = memberById(state.transactionMemberFilter);
+  const scopeLabel = selectedMember
+    ? `${memberRoleLabel(selectedMember)} · ${selectedMember.display_name}`
+    : "Semua pencatat";
 
   $("#historyChartEyebrow").textContent = isIncome ? "RINGKASAN INCOME" : "RINGKASAN OUTCOME";
   $("#historyChartScope").textContent = scopeLabel;
@@ -875,10 +1080,10 @@ function renderLogs() {
   }
 
   container.innerHTML = state.auditLogs.map((log) => {
-    const member = state.householdMembers.find((item) => String(item.user_id) === String(log.user_id));
+    const member = memberById(log.user_id);
     const fallbackName = log.user_id === state.user?.id ? (state.user.email?.split("@")[0] || "Pengguna") : "Pengguna";
     const actorName = member?.display_name || fallbackName;
-    const role = member?.role === "owner" ? "owner" : member?.role === "member" ? "member" : "unknown";
+    const role = memberColorClass(member);
     return `
       <article class="log-row">
         <div class="log-icon ${escapeHtml(log.action)}">${logIcon(log)}</div>
@@ -896,10 +1101,10 @@ function logDetail(log) {
   const details = log.details || {};
   const record = details.after || details.before || {};
   if (log.entity_type === "transfer") {
-    return `${escapeHtml(sourceLabel(record.from_balance))} → ${escapeHtml(sourceLabel(record.to_balance))} · ${formatRupiah(record.amount)}`;
+    return `${escapeHtml(sourceLabel(record.from_balance, record.from_member_id))} → ${escapeHtml(sourceLabel(record.to_balance, record.to_member_id))} · ${formatRupiah(record.amount)}`;
   }
   if (log.entity_type === "adjustment") {
-    return `${escapeHtml(sourceLabel(record.balance_key))}: ${formatRupiah(record.previous_balance)} → ${formatRupiah(record.new_balance)}${record.notes ? ` · ${escapeHtml(record.notes)}` : ""}`;
+    return `${escapeHtml(sourceLabel(record.balance_key, record.member_user_id))}: ${formatRupiah(record.previous_balance)} → ${formatRupiah(record.new_balance)}${record.notes ? ` · ${escapeHtml(record.notes)}` : ""}`;
   }
   if (log.entity_type === "monthly_bill") {
     return `${escapeHtml(record.name || "Tagihan bulanan")} · ${formatRupiah(record.amount)} · Tanggal berlangganan ${Number(record.subscription_day) || "—"}`;
@@ -914,6 +1119,9 @@ function logDetail(log) {
   if (log.entity_type === "asset") {
     return `${escapeHtml(record.name || "Aset")} · ${formatRupiah(record.current_value)}`;
   }
+  if (log.entity_type === "family_member") {
+    return escapeHtml(details.display_name || details.family_role || "Perubahan anggota keluarga");
+  }
   return "Perubahan data keluarga";
 }
 
@@ -923,6 +1131,7 @@ function logIcon(log) {
   if (log.entity_type === "monthly_bill") return "↻";
   if (log.entity_type === "bill_payment") return "✓";
   if (log.entity_type === "asset") return "◇";
+  if (log.entity_type === "family_member") return "♧";
   if (log.action === "delete") return "×";
   if (log.action === "update") return "✎";
   return "+";
@@ -957,13 +1166,13 @@ function openRecentTransaction(id) {
 }
 
 function transactionMember(item) {
-  return state.householdMembers.find((member) => String(member.user_id) === String(item.user_id)) ?? null;
+  return memberById(item.user_id);
 }
 
 function transactionDetailsHtml(item) {
   const member = transactionMember(item);
-  const role = member?.role === "owner" ? "owner" : member?.role === "member" ? "member" : "unknown";
-  const roleLabel = role === "owner" ? "Suami" : role === "member" ? "Istri" : "Anggota";
+  const role = memberColorClass(member);
+  const roleLabel = memberRoleLabel(member);
   const fallbackName = item.user_id === state.user?.id ? (state.user.email?.split("@")[0] || "Pengguna") : "Pengguna";
   const displayName = member?.display_name || fallbackName;
   const description = item.description || (item.type === "income" ? "Pemasukan keluarga" : "Pengeluaran keluarga");
@@ -973,7 +1182,7 @@ function transactionDetailsHtml(item) {
       <strong>${escapeHtml(item.category)}</strong>
       <span class="transaction-description">${escapeHtml(description)}</span>
       <time datetime="${escapeHtml(item.date)}">${formatDate(item.date, true)}</time>
-      <small class="member-name ${role}" title="Dicatat oleh ${roleLabel}">${escapeHtml(displayName)}</small>
+      <small class="member-name ${role}" title="Dicatat oleh ${escapeHtml(roleLabel)}">${escapeHtml(displayName)} · ${escapeHtml(roleLabel)}</small>
     </div>
   `;
 }
@@ -982,6 +1191,33 @@ function transactionDisplayName(item) {
   const member = transactionMember(item);
   const fallbackName = item.user_id === state.user?.id ? (state.user.email?.split("@")[0] || "Pengguna") : "Pengguna";
   return member?.display_name || fallbackName;
+}
+
+function transactionMemberAllocations(transaction) {
+  const allocations = { ...(transaction.member_allocations || {}) };
+  const legacyOwner = state.householdMembers
+    .filter((member) => member.system_role === "owner")
+    .sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at)))[0];
+  const legacyMember = state.householdMembers
+    .filter((member) => member.system_role === "member")
+    .sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at)))[0];
+  if (legacyOwner && Number(transaction.husband_allocation || 0)) {
+    allocations[legacyOwner.user_id] = Number(allocations[legacyOwner.user_id] || 0) + Number(transaction.husband_allocation);
+  }
+  if (legacyMember && Number(transaction.wife_allocation || 0)) {
+    allocations[legacyMember.user_id] = Number(allocations[legacyMember.user_id] || 0) + Number(transaction.wife_allocation);
+  }
+  return allocations;
+}
+
+function incomeAllocationSummary(transaction) {
+  const labels = Object.entries(transactionMemberAllocations(transaction))
+    .filter(([, amount]) => Number(amount) > 0)
+    .map(([userId]) => memberRoleLabel(memberById(userId)) === "None" ? memberById(userId)?.display_name : memberRoleLabel(memberById(userId)));
+  if (Number(transaction.savings_allocation || 0)) labels.push("Tabungan bersama");
+  if (Number(transaction.wife_savings_allocation || 0)) labels.push("Tabungan istri");
+  if (Number(transaction.education_allocation || 0)) labels.push("Pendidikan");
+  return labels.filter(Boolean).join(" · ") || "Pembagian income";
 }
 
 function openTransactionDetail(id) {
@@ -1007,13 +1243,15 @@ function openTransactionDetail(id) {
 
   const financeDetails = isIncome
     ? `<section class="detail-allocation detail-field-full"><span>Pembagian income</span><div>
-        <p><span>Uang suami</span><strong>${formatRupiah(transaction.husband_allocation)}</strong></p>
-        <p><span>Uang istri</span><strong>${formatRupiah(transaction.wife_allocation)}</strong></p>
+        ${Object.entries(transactionMemberAllocations(transaction)).filter(([, amount]) => Number(amount) > 0).map(([userId, amount]) => {
+          const member = memberById(userId);
+          return `<p><span>${escapeHtml(memberBalanceLabel(member))}${member?.is_active ? "" : " (akses dihapus)"}</span><strong>${formatRupiah(amount)}</strong></p>`;
+        }).join("")}
         <p><span>Tabungan bersama</span><strong>${formatRupiah(transaction.savings_allocation)}</strong></p>
         <p><span>Tabungan istri</span><strong>${formatRupiah(transaction.wife_savings_allocation ?? 0)}</strong></p>
         <p><span>Pendidikan</span><strong>${formatRupiah(transaction.education_allocation ?? 0)}</strong></p>
       </div></section>`
-    : `<div class="detail-field"><span>Sumber dana</span><strong>${escapeHtml(sourceLabel(transaction.source))}</strong></div>`;
+    : `<div class="detail-field"><span>Sumber dana</span><strong>${escapeHtml(sourceLabel(transaction.source, transaction.source_member_id))}</strong></div>`;
 
   $("#transactionDetailBody").innerHTML = basicDetails + financeDetails;
   openModal($("#transactionDetailDialog"));
@@ -1057,7 +1295,26 @@ function editTransaction(id) {
     showToast("Transaksi tidak ditemukan.", "error");
     return;
   }
+  if (!canManageTransaction(transaction)) {
+    showToast("Hanya pencatat transaksi atau room master yang dapat mengubah data ini.", "error");
+    return;
+  }
   openTransactionDialog(transaction.type, transaction.id);
+}
+
+function renderMemberAllocationFields(transaction = null) {
+  const values = transaction ? transactionMemberAllocations(transaction) : {};
+  $("#memberAllocationFields").innerHTML = activeHouseholdMembers().map((member) => `
+    <label><span>${escapeHtml(memberBalanceLabel(member))}</span><div class="money-field small"><b>Rp</b><input data-member-allocation="${member.user_id}" inputmode="numeric" placeholder="0" value="${formatNumberInput(values[member.user_id] || 0)}" /></div></label>
+  `).join("");
+}
+
+function legacySourceMemberId(source) {
+  const systemRole = source === "husband" ? "owner" : source === "wife" ? "member" : null;
+  if (!systemRole) return null;
+  return state.householdMembers
+    .filter((member) => member.system_role === systemRole)
+    .sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at)))[0]?.user_id || null;
 }
 
 function openTransactionDialog(mode, transactionId = null) {
@@ -1072,10 +1329,12 @@ function openTransactionDialog(mode, transactionId = null) {
   $("#transactionDialogCopy").textContent = isEditing
     ? "Perbarui data transaksi lalu simpan perubahan."
     : mode === "income"
-      ? "Bagi pemasukan untuk suami, istri, tabungan bersama, tabungan istri, dan pendidikan."
+      ? "Bagi pemasukan untuk anggota keluarga, tabungan bersama, tabungan istri, dan pendidikan."
       : "Catat pengeluaran dan pilih sumber dananya.";
   $("#incomeAllocation").classList.toggle("hidden", mode !== "income");
   $("#outcomeSourceGroup").classList.toggle("hidden", mode !== "outcome");
+  renderMemberAllocationFields(isEditing ? state.transactions.find((item) => String(item.id) === String(transactionId)) : null);
+  $("#outcomeSource").innerHTML = balanceOptionsHtml(null, true);
 
   const categories = mode === "income" ? incomeCategories : outcomeCategories;
   $("#transactionCategory").innerHTML = `<option value="">Pilih kategori</option>${categories.map((item) => `<option>${item}</option>`).join("")}`;
@@ -1091,13 +1350,16 @@ function openTransactionDialog(mode, transactionId = null) {
     $("#transactionCategory").value = transaction.category;
     $("#transactionDescription").value = transaction.description || "";
     if (mode === "income") {
-      $("#husbandAllocation").value = formatNumberInput(transaction.husband_allocation);
-      $("#wifeAllocation").value = formatNumberInput(transaction.wife_allocation);
       $("#savingsAllocation").value = formatNumberInput(transaction.savings_allocation);
       $("#wifeSavingsAllocation").value = formatNumberInput(transaction.wife_savings_allocation ?? 0);
       $("#educationAllocation").value = formatNumberInput(transaction.education_allocation ?? 0);
     } else {
-      $("#outcomeSource").value = transaction.source;
+      const sourceKey = transaction.source === "member"
+        ? memberBalanceKey(transaction.source_member_id)
+        : ["husband", "wife"].includes(transaction.source)
+          ? memberBalanceKey(legacySourceMemberId(transaction.source))
+          : transaction.source;
+      $("#outcomeSource").value = sourceKey;
     }
   }
   updateAllocationStatus();
@@ -1107,8 +1369,10 @@ function openTransactionDialog(mode, transactionId = null) {
 async function saveTransaction(event) {
   event.preventDefault();
   const amount = parseNumber($("#transactionAmount").value);
-  const husband = parseNumber($("#husbandAllocation").value);
-  const wife = parseNumber($("#wifeAllocation").value);
+  const memberAllocations = Object.fromEntries(
+    $$('[data-member-allocation]').map((input) => [input.dataset.memberAllocation, parseNumber(input.value)]).filter(([, value]) => value > 0),
+  );
+  const personalAllocated = Object.values(memberAllocations).reduce((sum, value) => sum + value, 0);
   const savings = parseNumber($("#savingsAllocation").value);
   const wifeSavings = parseNumber($("#wifeSavingsAllocation").value);
   const education = parseNumber($("#educationAllocation").value);
@@ -1117,7 +1381,7 @@ async function saveTransaction(event) {
     showToast("Nominal harus lebih dari nol.", "error");
     return;
   }
-  if (state.transactionMode === "income" && husband + wife + savings + wifeSavings + education !== amount) {
+  if (state.transactionMode === "income" && personalAllocated + savings + wifeSavings + education !== amount) {
     showToast("Total pembagian harus sama dengan nominal income.", "error");
     return;
   }
@@ -1125,6 +1389,8 @@ async function saveTransaction(event) {
   const button = $("#saveTransactionButton");
   setButtonBusy(button, true, "Menyimpan…");
   const isEditing = state.editingTransactionId !== null;
+  const selectedSource = state.transactionMode === "outcome" ? $("#outcomeSource").value : null;
+  const personalSource = selectedSource?.startsWith("member:");
   const payload = {
     household_id: state.household.id,
     type: state.transactionMode,
@@ -1132,9 +1398,11 @@ async function saveTransaction(event) {
     date: $("#transactionDate").value,
     category: $("#transactionCategory").value,
     description: $("#transactionDescription").value.trim(),
-    source: state.transactionMode === "outcome" ? $("#outcomeSource").value : null,
-    husband_allocation: state.transactionMode === "income" ? husband : 0,
-    wife_allocation: state.transactionMode === "income" ? wife : 0,
+    source: state.transactionMode === "outcome" ? (personalSource ? "member" : selectedSource) : null,
+    source_member_id: personalSource ? selectedSource.slice(7) : null,
+    member_allocations: state.transactionMode === "income" ? memberAllocations : {},
+    husband_allocation: 0,
+    wife_allocation: 0,
     savings_allocation: state.transactionMode === "income" ? savings : 0,
     wife_savings_allocation: state.transactionMode === "income" ? wifeSavings : 0,
     education_allocation: state.transactionMode === "income" ? education : 0,
@@ -1144,6 +1412,11 @@ async function saveTransaction(event) {
   const insufficientBalance = projectedNegativeBalance(payload, isEditing ? state.editingTransactionId : null);
   if (insufficientBalance) {
     showToast(`Saldo ${sourceLabel(insufficientBalance)} tidak mencukupi.`, "error");
+    setButtonBusy(button, false);
+    return;
+  }
+  const personalDeficit = projectedPersonalDeficit(payload, isEditing ? state.editingTransactionId : null);
+  if (personalDeficit && !confirm(`${sourceLabel("member", personalDeficit.userId)} akan menjadi ${formatRupiah(personalDeficit.balance)} (defisit). Tetap simpan transaksi?`)) {
     setButtonBusy(button, false);
     return;
   }
@@ -1170,8 +1443,7 @@ async function saveTransaction(event) {
 
 function updateAllocationStatus() {
   const amount = parseNumber($("#transactionAmount").value);
-  const allocated = parseNumber($("#husbandAllocation").value)
-    + parseNumber($("#wifeAllocation").value)
+  const allocated = $$('[data-member-allocation]').reduce((sum, input) => sum + parseNumber(input.value), 0)
     + parseNumber($("#savingsAllocation").value)
     + parseNumber($("#wifeSavingsAllocation").value)
     + parseNumber($("#educationAllocation").value);
@@ -1185,14 +1457,14 @@ function updateAllocationStatus() {
 function openTransferDialog() {
   $("#transferForm").reset();
   $("#transferDate").value = today;
-  $("#transferSource").innerHTML = balanceOptionsHtml();
-  $("#transferSource").value = "husband";
+  $("#transferSource").innerHTML = balanceOptionsHtml(null, true);
+  $("#transferSource").value = memberBalanceKey(state.user.id);
   updateTransferFields();
   openModal($("#transferDialog"));
 }
 
 function updateTransferFields() {
-  const source = $("#transferSource").value || "husband";
+  const source = $("#transferSource").value || memberBalanceKey(state.user.id);
   const previousDestination = $("#transferDestination").value;
   $("#transferDestination").innerHTML = balanceOptionsHtml(source);
   if (previousDestination && previousDestination !== source) $("#transferDestination").value = previousDestination;
@@ -1214,8 +1486,12 @@ async function saveTransfer(event) {
     showToast("Nominal transfer harus lebih dari nol.", "error");
     return;
   }
-  if (amount > available) {
+  if (!source.startsWith("member:") && amount > available) {
     showToast(`Saldo ${sourceLabel(source)} tidak mencukupi.`, "error");
+    return;
+  }
+  if (source.startsWith("member:") && available - amount < 0
+      && !confirm(`${sourceLabel("member", source.slice(7))} akan menjadi ${formatRupiah(available - amount)} (defisit). Tetap transfer?`)) {
     return;
   }
 
@@ -1240,17 +1516,17 @@ async function saveTransfer(event) {
 
 function openAdjustmentDialog() {
   $("#adjustmentForm").reset();
-  $("#adjustmentBalance").innerHTML = balanceOptionsHtml();
-  $("#adjustmentBalance").value = "husband";
+  $("#adjustmentBalance").innerHTML = balanceOptionsHtml(null, true);
+  $("#adjustmentBalance").value = memberBalanceKey(state.user.id);
   updateAdjustmentFields();
   openModal($("#adjustmentDialog"));
 }
 
 function updateAdjustmentFields() {
-  const balanceKey = $("#adjustmentBalance").value || "husband";
+  const balanceKey = $("#adjustmentBalance").value || memberBalanceKey(state.user.id);
   const current = balanceValue(getTotals(), balanceKey);
   $("#adjustmentCurrent").textContent = formatRupiah(current);
-  $("#adjustmentNewBalance").value = formatNumberInputIncludingZero(current);
+  $("#adjustmentNewBalance").value = formatSignedNumberInput(current);
   $("#adjustmentDelta").value = "0";
   setAdjustmentOperator("add", false);
   updateAdjustmentEquation(current, 0, current);
@@ -1267,21 +1543,21 @@ function setAdjustmentOperator(operator, synchronize = true) {
 }
 
 function syncAdjustmentFromDelta() {
-  const balanceKey = $("#adjustmentBalance").value || "husband";
+  const balanceKey = $("#adjustmentBalance").value || memberBalanceKey(state.user.id);
   const current = balanceValue(getTotals(), balanceKey);
   const delta = parseNumber($("#adjustmentDelta").value);
   const result = state.adjustmentOperator === "subtract" ? current - delta : current + delta;
-  const invalid = result < 0;
+  const invalid = result < 0 && !balanceKey.startsWith("member:");
 
-  $("#adjustmentNewBalance").value = formatNumberInputIncludingZero(Math.max(result, 0));
+  $("#adjustmentNewBalance").value = formatSignedNumberInput(invalid ? 0 : result);
   $("#adjustmentEntry").classList.toggle("has-error", invalid);
   updateAdjustmentEquation(current, delta, result, invalid);
 }
 
 function syncAdjustmentFromNewBalance() {
-  const balanceKey = $("#adjustmentBalance").value || "husband";
+  const balanceKey = $("#adjustmentBalance").value || memberBalanceKey(state.user.id);
   const current = balanceValue(getTotals(), balanceKey);
-  const result = parseNumber($("#adjustmentNewBalance").value);
+  const result = parseSignedNumber($("#adjustmentNewBalance").value);
   const operator = result < current ? "subtract" : "add";
   const delta = Math.abs(result - current);
 
@@ -1304,13 +1580,17 @@ function updateAdjustmentEquation(current, delta, result, invalid = false) {
 async function saveAdjustment(event) {
   event.preventDefault();
   const balanceKey = $("#adjustmentBalance").value;
-  const newBalance = parseNumber($("#adjustmentNewBalance").value);
+  const newBalance = parseSignedNumber($("#adjustmentNewBalance").value);
   const currentBalance = balanceValue(getTotals(), balanceKey);
   const delta = parseNumber($("#adjustmentDelta").value);
   const notes = $("#adjustmentNotes").value.trim();
 
-  if (state.adjustmentOperator === "subtract" && delta > currentBalance) {
+  if (!balanceKey.startsWith("member:") && state.adjustmentOperator === "subtract" && delta > currentBalance) {
     showToast("Nominal pengurangan melebihi saldo saat ini.", "error");
+    return;
+  }
+  if (balanceKey.startsWith("member:") && newBalance < 0
+      && !confirm(`${sourceLabel("member", balanceKey.slice(7))} akan menjadi ${formatRupiah(newBalance)} (defisit). Tetap simpan penyesuaian?`)) {
     return;
   }
   if (newBalance === currentBalance) {
@@ -1343,49 +1623,46 @@ function currentBillingMonthKey(referenceDate = new Date()) {
   return `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
-function editableMonthlyBillBalance() {
-  return state.household?.role === "owner" ? "husband" : "wife";
-}
-
-function canEditMonthlyBillBalance(balanceKey) {
-  return editableMonthlyBillBalance() === balanceKey;
+function canEditMonthlyBillMember(userId) {
+  return String(state.user?.id) === String(userId);
 }
 
 function isMonthlyBillPaid(billId) {
   return state.monthlyBillPayments.some((payment) => String(payment.monthly_bill_id) === String(billId));
 }
 
-function unpaidBillsForBalance(balanceKey) {
-  return state.monthlyBills.filter((bill) => bill.balance_key === balanceKey && !isMonthlyBillPaid(bill.id));
+function unpaidBillsForMember(userId) {
+  return state.monthlyBills.filter((bill) => String(bill.owner_user_id) === String(userId) && !isMonthlyBillPaid(bill.id));
 }
 
-function openMonthlyBillsDialog(balanceKey) {
-  if (!['husband', 'wife'].includes(balanceKey)) return;
-  state.activeMonthlyBillBalance = balanceKey;
+function openMonthlyBillsDialog(userId) {
+  const member = memberById(userId);
+  if (!member?.is_active) return;
+  state.activeMonthlyBillMemberId = userId;
   closeMonthlyBillForm();
   clearMonthlyBillsError();
 
-  const ownBalance = canEditMonthlyBillBalance(balanceKey);
-  $("#monthlyBillsTitle").textContent = sourceLabel(balanceKey);
+  const ownBalance = canEditMonthlyBillMember(userId);
+  $("#monthlyBillsTitle").textContent = `${memberBalanceLabel(member)} · ${member.display_name}`;
   $("#monthlyBillsCopy").textContent = ownBalance
     ? "Tambahkan pengeluaran tetap dan tandai status pembayarannya setiap bulan."
-    : `Detail tagihan ${sourceLabel(balanceKey).toLowerCase()}. Kamu hanya dapat melihat data ini.`;
+    : `Detail tagihan ${memberBalanceLabel(member).toLowerCase()}. Kamu hanya dapat melihat data ini.`;
   $("#addMonthlyBillButton").classList.toggle("hidden", !ownBalance);
   $("#monthlyBillsAccessNote").textContent = ownBalance
     ? "Checklist hanya menjadi penanda. Pembayaran tetap dicatat manual melalui Outcome."
-    : `Mode lihat · Hanya pemilik ${sourceLabel(balanceKey).toLowerCase()} yang dapat menambah, mengubah, menghapus, atau mencentang tagihan.`;
+    : `Mode lihat · Hanya ${member.display_name} yang dapat menambah, mengubah, menghapus, atau mencentang tagihan.`;
 
   renderMonthlyBills();
   openModal($("#monthlyBillsDialog"));
 }
 
 function renderMonthlyBills() {
-  const balanceKey = state.activeMonthlyBillBalance;
-  const bills = state.monthlyBills.filter((bill) => bill.balance_key === balanceKey);
+  const memberId = state.activeMonthlyBillMemberId;
+  const bills = state.monthlyBills.filter((bill) => String(bill.owner_user_id) === String(memberId));
   const unpaidTotal = bills
     .filter((bill) => !isMonthlyBillPaid(bill.id))
     .reduce((sum, bill) => sum + Number(bill.amount), 0);
-  const canEdit = canEditMonthlyBillBalance(balanceKey);
+  const canEdit = canEditMonthlyBillMember(memberId);
   $("#monthlyBillsUnpaidTotal").textContent = formatRupiah(unpaidTotal);
 
   if (!bills.length) {
@@ -1456,7 +1733,7 @@ function endOfLocalDay(date) {
 }
 
 function openMonthlyBillForm(billId = null) {
-  if (!canEditMonthlyBillBalance(state.activeMonthlyBillBalance)) return;
+  if (!canEditMonthlyBillMember(state.activeMonthlyBillMemberId)) return;
   clearMonthlyBillsError();
   state.editingMonthlyBillId = billId;
   $("#monthlyBillForm").reset();
@@ -1466,7 +1743,7 @@ function openMonthlyBillForm(billId = null) {
 
   if (billId) {
     const bill = state.monthlyBills.find((item) => String(item.id) === String(billId));
-    if (!bill || bill.balance_key !== state.activeMonthlyBillBalance) return;
+    if (!bill || String(bill.owner_user_id) !== String(state.activeMonthlyBillMemberId)) return;
     $("#monthlyBillName").value = bill.name;
     $("#monthlyBillAmount").value = formatNumberInput(bill.amount);
     $("#monthlyBillSubscriptionDay").value = String(bill.subscription_day);
@@ -1485,8 +1762,8 @@ function closeMonthlyBillForm() {
 async function saveMonthlyBill(event) {
   event.preventDefault();
   clearMonthlyBillsError();
-  const balanceKey = state.activeMonthlyBillBalance;
-  if (!canEditMonthlyBillBalance(balanceKey)) {
+  const memberId = state.activeMonthlyBillMemberId;
+  if (!canEditMonthlyBillMember(memberId)) {
     showToast("Kamu hanya dapat mengubah tagihan milikmu sendiri.", "error");
     return;
   }
@@ -1513,7 +1790,7 @@ async function saveMonthlyBill(event) {
       ...payload,
       household_id: state.household.id,
       owner_user_id: state.user.id,
-      balance_key: balanceKey,
+      balance_key: "member",
     });
 
   if (error) {
@@ -1527,7 +1804,7 @@ async function saveMonthlyBill(event) {
 }
 
 async function deleteMonthlyBill(billId) {
-  if (!canEditMonthlyBillBalance(state.activeMonthlyBillBalance)) return;
+  if (!canEditMonthlyBillMember(state.activeMonthlyBillMemberId)) return;
   const bill = state.monthlyBills.find((item) => String(item.id) === String(billId));
   if (!bill || !confirm(`Hapus tagihan ${bill.name}?`)) return;
   const { error } = await supabase
@@ -1543,9 +1820,9 @@ async function deleteMonthlyBill(billId) {
 }
 
 async function toggleMonthlyBillPayment(billId, paid) {
-  if (!canEditMonthlyBillBalance(state.activeMonthlyBillBalance)) return;
+  if (!canEditMonthlyBillMember(state.activeMonthlyBillMemberId)) return;
   const bill = state.monthlyBills.find((item) => String(item.id) === String(billId));
-  if (!bill || bill.balance_key !== state.activeMonthlyBillBalance) return;
+  if (!bill || String(bill.owner_user_id) !== String(state.activeMonthlyBillMemberId)) return;
 
   const query = supabase.from("monthly_bill_payments");
   const { error } = paid
@@ -1715,16 +1992,23 @@ async function saveAsset(event) {
 }
 
 async function deleteTransaction(id) {
-  if (!confirm("Hapus transaksi ini? Saldo akan dihitung ulang.")) return;
   const transaction = state.transactions.find((item) => String(item.id) === String(id));
+  if (!transaction || !canManageTransaction(transaction)) {
+    showToast("Hanya pencatat transaksi atau room master yang dapat menghapus data ini.", "error");
+    return;
+  }
+  if (!confirm("Hapus transaksi ini? Saldo akan dihitung ulang.")) return;
   if (transaction) {
     const balances = currentBalanceMap();
+    const currentBalances = { ...balances };
     applyTransactionEffect(balances, transaction, -1);
-    const negativeKey = balanceOptions.find((item) => balances[item.key] < 0)?.key;
+    const negativeKey = sharedBalanceOptions.find((item) => balances[item.key] < 0)?.key;
     if (negativeKey) {
       showToast(`Transaksi tidak dapat dihapus karena saldo ${sourceLabel(negativeKey)} akan menjadi minus.`, "error");
       return;
     }
+    const personalDeficit = Object.entries(balances).find(([key, value]) => key.startsWith("member:") && value < 0 && value < Number(currentBalances[key] || 0));
+    if (personalDeficit && !confirm(`${sourceLabel("member", personalDeficit[0].slice(7))} akan menjadi ${formatRupiah(personalDeficit[1])} (defisit). Tetap hapus transaksi?`)) return;
   }
   const { error } = await supabase
     .from("transactions")
@@ -1787,6 +2071,12 @@ function parseNumber(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function parseSignedNumber(value) {
+  const text = String(value ?? "").trim();
+  const number = parseNumber(text);
+  return text.startsWith("-") || text.startsWith("−") ? -number : number;
+}
+
 function formatNumberInput(value) {
   const number = parseNumber(value);
   return number ? new Intl.NumberFormat("id-ID").format(number) : "";
@@ -1796,6 +2086,15 @@ function formatNumberInputIncludingZero(value) {
   const digits = String(value ?? "").replace(/\D/g, "");
   if (!digits) return "";
   return new Intl.NumberFormat("id-ID").format(Number(digits));
+}
+
+function formatSignedNumberInput(value) {
+  const text = String(value ?? "").trim();
+  const negative = text.startsWith("-") || text.startsWith("−") || Number(value) < 0;
+  const number = parseNumber(text);
+  if (negative && number === 0 && (text === "-" || text === "−")) return "-";
+  const formatted = new Intl.NumberFormat("id-ID").format(number);
+  return negative && number ? `-${formatted}` : formatted;
 }
 
 function formatRupiah(value) {
@@ -1862,22 +2161,36 @@ function formatQuantity(value) {
   return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(Number(value));
 }
 
-function sourceLabel(source) {
-  if (source === "husband") return "Uang suami";
-  if (source === "wife") return "Uang istri";
+function sourceLabel(source, memberId = null) {
+  if (source === "member") return memberBalanceLabel(memberById(memberId));
+  if (source === "husband") return memberBalanceLabel(memberById(legacySourceMemberId("husband"))) || "Uang suami";
+  if (source === "wife") return memberBalanceLabel(memberById(legacySourceMemberId("wife"))) || "Uang istri";
   if (source === "wife_savings") return "Tabungan istri";
   if (source === "education") return "Pendidikan";
   return "Tabungan bersama";
 }
 
-function balanceOptionsHtml(excludedKey = null) {
-  return balanceOptions
+function getBalanceOptions() {
+  return [
+    ...activeHouseholdMembers().map((member) => ({
+      key: memberBalanceKey(member.user_id),
+      label: `${memberBalanceLabel(member)} · ${member.display_name}`,
+      personal: true,
+    })),
+    ...sharedBalanceOptions,
+  ];
+}
+
+function balanceOptionsHtml(excludedKey = null, restrictPersonalSource = false) {
+  return getBalanceOptions()
     .filter((item) => item.key !== excludedKey)
+    .filter((item) => !restrictPersonalSource || !item.personal || isRoomMaster() || item.key === memberBalanceKey(state.user.id))
     .map((item) => `<option value="${item.key}">${item.label}</option>`)
     .join("");
 }
 
 function balanceValue(totals, key) {
+  if (key?.startsWith("member:")) return Number(totals.memberBalances[key.slice(7)] || 0);
   if (key === "husband") return Number(totals.husband);
   if (key === "wife") return Number(totals.wife);
   if (key === "savings") return Number(totals.savings);
@@ -1888,18 +2201,25 @@ function balanceValue(totals, key) {
 
 function currentBalanceMap() {
   const totals = getTotals();
-  return Object.fromEntries(balanceOptions.map((item) => [item.key, balanceValue(totals, item.key)]));
+  return Object.fromEntries(getBalanceOptions().map((item) => [item.key, balanceValue(totals, item.key)]));
 }
 
 function applyTransactionEffect(balances, transaction, multiplier = 1) {
   if (transaction.type === "income") {
-    balances.husband += multiplier * Number(transaction.husband_allocation || 0);
-    balances.wife += multiplier * Number(transaction.wife_allocation || 0);
+    Object.entries(transactionMemberAllocations(transaction)).forEach(([userId, amount]) => {
+      const key = memberBalanceKey(userId);
+      if (Object.hasOwn(balances, key)) balances[key] += multiplier * Number(amount || 0);
+    });
     balances.savings += multiplier * Number(transaction.savings_allocation || 0);
     balances.wife_savings += multiplier * Number(transaction.wife_savings_allocation || 0);
     balances.education += multiplier * Number(transaction.education_allocation || 0);
-  } else if (transaction.source && Object.hasOwn(balances, transaction.source)) {
-    balances[transaction.source] -= multiplier * Number(transaction.amount || 0);
+  } else {
+    const key = transaction.source === "member"
+      ? memberBalanceKey(transaction.source_member_id)
+      : transaction.source === "husband" || transaction.source === "wife"
+        ? memberBalanceKey(legacySourceMemberId(transaction.source))
+        : transaction.source;
+    if (key && Object.hasOwn(balances, key)) balances[key] -= multiplier * Number(transaction.amount || 0);
   }
 }
 
@@ -1910,7 +2230,19 @@ function projectedNegativeBalance(payload, editingId = null) {
     if (previous) applyTransactionEffect(balances, previous, -1);
   }
   applyTransactionEffect(balances, payload, 1);
-  return balanceOptions.find((item) => balances[item.key] < 0)?.key || null;
+  return sharedBalanceOptions.find((item) => balances[item.key] < 0)?.key || null;
+}
+
+function projectedPersonalDeficit(payload, editingId = null) {
+  const balances = currentBalanceMap();
+  const currentBalances = { ...balances };
+  if (editingId) {
+    const previous = state.transactions.find((item) => String(item.id) === String(editingId));
+    if (previous) applyTransactionEffect(balances, previous, -1);
+  }
+  applyTransactionEffect(balances, payload, 1);
+  const entry = Object.entries(balances).find(([key, value]) => key.startsWith("member:") && value < 0 && value < Number(currentBalances[key] || 0));
+  return entry ? { userId: entry[0].slice(7), balance: entry[1] } : null;
 }
 
 function assetSymbol(type) {
