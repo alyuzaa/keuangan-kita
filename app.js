@@ -24,6 +24,7 @@ const state = {
   transactionMemberFilter: "all",
   transactionMonth: currentMonthKey,
   transactionView: "transactions",
+  historyChartDetailsOpen: false,
   logsMonth: currentMonthKey,
   adjustmentOperator: "add",
   editingTransactionId: null,
@@ -39,8 +40,9 @@ const state = {
 };
 
 const incomeCategories = ["Gaji", "Bonus", "Usaha", "Investasi", "Hadiah", "Lainnya"];
-const outcomeCategories = ["Makan & minum", "Tagihan", "Transportasi", "Kesehatan", "Kecantikan", "Belanja", "Hiburan", "Rumah tangga", "Lainnya"];
-const chartColors = ["#bd5a58", "#d6a84d", "#3f806b", "#728e60", "#b97891", "#8069a8", "#d07c4f", "#68889c", "#8a918c"];
+const outcomeCategories = ["Makan & minum", "Tagihan", "Transportasi", "Kesehatan", "Kecantikan", "Belanja", "Hiburan", "Rumah tangga", "Pengeluaran Bersama", "Tidak Terduga", "Lainnya"];
+const sharedOutcomeCategory = "Pengeluaran Bersama";
+const chartColors = ["#bd5a58", "#d6a84d", "#3f806b", "#728e60", "#b97891", "#8069a8", "#d07c4f", "#68889c", "#a66f5a", "#8a918c"];
 const today = new Date().toISOString().slice(0, 10);
 const authUsernameDomain = "users.keuangan-kita.invalid";
 const usernamePattern = /^[a-z0-9](?:[a-z0-9._-]{1,28}[a-z0-9])?$/;
@@ -291,6 +293,11 @@ function bindEvents() {
   $$(".filter-tabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.transactionFilter = button.dataset.filter;
+      state.historyChartDetailsOpen = false;
+      if (state.transactionFilter === "income" && state.transactionMemberFilter === "shared") {
+        state.transactionMemberFilter = "all";
+        renderMemberFilters();
+      }
       $$(".filter-tabs button").forEach((item) => item.classList.toggle("active", item === button));
       renderTransactions();
       renderHistoryChart();
@@ -307,7 +314,12 @@ function bindEvents() {
 
   $("#transactionMonthFilter").addEventListener("change", (event) => {
     state.transactionMonth = event.target.value;
+    state.historyChartDetailsOpen = false;
     renderTransactions();
+    renderHistoryChart();
+  });
+  $("#historyChartDetailButton").addEventListener("click", () => {
+    state.historyChartDetailsOpen = !state.historyChartDetailsOpen;
     renderHistoryChart();
   });
   $("#logsMonthFilter").addEventListener("change", (event) => {
@@ -362,6 +374,7 @@ function bindEvents() {
   $("#removeMemberConfirmation").addEventListener("input", updateRemoveMemberButton);
   $("#archiveSavingsConfirmation").addEventListener("input", updateArchiveSavingsButton);
   $("#paydayEnabled").addEventListener("change", updatePaydaySettingsFields);
+  $("#transactionCategory").addEventListener("change", () => renderOutcomeSourceOptions());
 }
 
 function setAuthMode(mode) {
@@ -926,20 +939,40 @@ function renderAll() {
   switchView(state.activeView);
 }
 
+function isSharedOutcomeCategory(category) {
+  return String(category || "").trim().toLocaleLowerCase("id-ID") === sharedOutcomeCategory.toLocaleLowerCase("id-ID");
+}
+
+function isSharedOutcome(item) {
+  return item?.type === "outcome" && isSharedOutcomeCategory(item.category);
+}
+
+function matchesHistoryMemberFilter(item) {
+  if (state.transactionMemberFilter === "all") return true;
+  if (state.transactionMemberFilter === "shared") return isSharedOutcome(item);
+  return String(item.user_id) === state.transactionMemberFilter && !isSharedOutcome(item);
+}
+
 function renderMemberFilters() {
   const transactionUserIds = new Set(state.transactions.map((item) => String(item.user_id)).filter(Boolean));
   const members = state.householdMembers
     .filter((member) => member.is_active || transactionUserIds.has(String(member.user_id)))
     .sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at)));
-  const validFilters = new Set(["all", ...members.map((member) => String(member.user_id))]);
+  const validFilters = new Set(["all", "shared", ...members.map((member) => String(member.user_id))]);
   if (!validFilters.has(state.transactionMemberFilter)) state.transactionMemberFilter = "all";
   $("#memberFilterTabs").innerHTML = `
     <button class="${state.transactionMemberFilter === "all" ? "active" : ""}" data-member-filter="all" type="button">Semua</button>
-    ${members.map((member) => `<button class="${state.transactionMemberFilter === String(member.user_id) ? "active" : ""}" data-member-filter="${member.user_id}" type="button">${escapeHtml(memberRoleLabel(member))}${member.is_active ? "" : " · Dihapus"}</button>`).join("")}`;
+    ${members.map((member) => `<button class="${state.transactionMemberFilter === String(member.user_id) ? "active" : ""}" data-member-filter="${member.user_id}" type="button">${escapeHtml(memberRoleLabel(member))}${member.is_active ? "" : " · Dihapus"}</button>`).join("")}
+    <button class="${state.transactionMemberFilter === "shared" ? "active" : ""}" data-member-filter="shared" type="button">Pengeluaran bersama</button>`;
 
   $$("#memberFilterTabs button").forEach((button) => {
     button.addEventListener("click", () => {
       state.transactionMemberFilter = button.dataset.memberFilter;
+      state.historyChartDetailsOpen = false;
+      if (state.transactionMemberFilter === "shared") {
+        state.transactionFilter = "outcome";
+        $$(".filter-tabs button").forEach((item) => item.classList.toggle("active", item.dataset.filter === "outcome"));
+      }
       $$("#memberFilterTabs button").forEach((item) => item.classList.toggle("active", item === button));
       renderTransactions();
       renderHistoryChart();
@@ -1164,7 +1197,7 @@ function renderTransactions() {
       ? item.type === dailyType
       : state.transactionFilter === "all" || item.type === state.transactionFilter;
     const matchesMonth = state.transactionMonth === "all" || item.date.startsWith(state.transactionMonth);
-    const matchesMember = state.transactionMemberFilter === "all" || String(item.user_id) === state.transactionMemberFilter;
+    const matchesMember = matchesHistoryMemberFilter(item);
     return matchesType && matchesMonth && matchesMember;
   });
   const container = $("#transactionsTable");
@@ -1286,7 +1319,7 @@ function renderHistoryChart() {
   const relevant = state.transactions.filter((item) => {
     const matchesType = item.type === chartType;
     const matchesMonth = state.transactionMonth === "all" || item.date.startsWith(state.transactionMonth);
-    const matchesMember = state.transactionMemberFilter === "all" || String(item.user_id) === state.transactionMemberFilter;
+    const matchesMember = matchesHistoryMemberFilter(item);
     return matchesType && matchesMonth && matchesMember;
   });
 
@@ -1298,12 +1331,20 @@ function renderHistoryChart() {
   const total = categories.reduce((sum, item) => sum + item.value, 0);
   const isIncome = chartType === "income";
   const selectedMember = memberById(state.transactionMemberFilter);
-  const scopeLabel = selectedMember
-    ? memberRoleLabel(selectedMember)
-    : "Semua";
+  const scopeLabel = state.transactionMemberFilter === "shared"
+    ? "Pengeluaran bersama"
+    : selectedMember
+      ? memberRoleLabel(selectedMember)
+      : "Semua";
+  const detailButton = $("#historyChartDetailButton");
+  if (isIncome) state.historyChartDetailsOpen = false;
 
   $("#historyChartEyebrow").textContent = isIncome ? "RINGKASAN INCOME" : "RINGKASAN OUTCOME";
   $("#historyChartScope").textContent = scopeLabel;
+  if (!total) state.historyChartDetailsOpen = false;
+  detailButton.classList.toggle("hidden", isIncome || !total);
+  detailButton.textContent = state.historyChartDetailsOpen ? "Tutup detail" : "Detail";
+  detailButton.setAttribute("aria-expanded", String(state.historyChartDetailsOpen));
 
   if (!total) {
     $("#historyChartContent").innerHTML = `
@@ -1340,6 +1381,33 @@ function renderHistoryChart() {
           return `<div class="chart-legend-row ${colorClass}"><i></i><div><strong>${escapeHtml(item.name)}</strong><span>${formatPercentage(percentage)}</span></div><b>${formatRupiah(item.value)}</b></div>`;
         }).join("")}
       </div>
+    </div>
+    ${!isIncome && state.historyChartDetailsOpen ? historyOutcomeDetailsHtml(relevant, categories) : ""}`;
+}
+
+function historyOutcomeDetailsHtml(transactions, categories) {
+  return `
+    <div class="history-outcome-details" aria-label="Detail ringkasan outcome">
+      ${categories.map((category) => {
+        const items = transactions
+          .filter((item) => item.category === category.name)
+          .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+        return `
+          <section class="history-outcome-detail-group">
+            <div class="history-outcome-detail-heading">
+              <strong>${escapeHtml(category.name)}</strong>
+              <span>${items.length} transaksi</span>
+            </div>
+            <div class="history-outcome-detail-list">
+              ${items.map((item) => `
+                <div class="history-outcome-detail-row">
+                  <span>${escapeHtml(item.description?.trim() || "Tanpa keterangan")}</span>
+                  <b>${formatRupiah(item.amount)}</b>
+                  <time datetime="${escapeHtml(String(item.date).slice(0, 10))}">${formatDate(item.date, true)}</time>
+                </div>`).join("")}
+            </div>
+          </section>`;
+      }).join("")}
     </div>`;
 }
 
@@ -1564,6 +1632,8 @@ function transactionDetailsHtml(item) {
   const member = transactionMember(item);
   const role = memberColorClass(member);
   const roleLabel = memberRoleLabel(member);
+  const recorderLabel = roleLabel === "None" ? (member?.display_name || transactionDisplayName(item)) : roleLabel;
+  const memberText = isSharedOutcome(item) ? `Dicatat oleh ${recorderLabel}` : roleLabel;
   const description = item.description || (item.type === "income" ? "Pemasukan keluarga" : "Pengeluaran keluarga");
 
   return `
@@ -1571,7 +1641,7 @@ function transactionDetailsHtml(item) {
       <strong>${escapeHtml(item.category)}</strong>
       <span class="transaction-description">${escapeHtml(description)}</span>
       <time datetime="${escapeHtml(item.date)}">${formatDate(item.date, true)}</time>
-      <small class="member-name ${role}" title="Role pencatat">${escapeHtml(roleLabel)}</small>
+      <small class="member-name ${role}" title="${isSharedOutcome(item) ? "Pencatat transaksi" : "Role pencatat"}">${escapeHtml(memberText)}</small>
     </div>
   `;
 }
@@ -1725,6 +1795,57 @@ function legacySourceMemberId(source) {
     .sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at)))[0]?.user_id || null;
 }
 
+function outcomeSourceKey(transaction) {
+  if (!transaction || transaction.type !== "outcome") return null;
+  if (transaction.source === "member") return memberBalanceKey(transaction.source_member_id);
+  if (["husband", "wife"].includes(transaction.source)) return memberBalanceKey(legacySourceMemberId(transaction.source));
+  if (transaction.source === "savings_account") return savingsBalanceKey(transaction.source_savings_id);
+  return savingsBalanceKey(savingsAccountByLegacyKey(transaction.source)?.id);
+}
+
+function renderOutcomeSourceOptions(preferredKey = null, editingTransaction = null) {
+  if (state.transactionMode !== "outcome") return;
+  const select = $("#outcomeSource");
+  const currentKey = preferredKey || select.value || null;
+  const shared = isSharedOutcomeCategory($("#transactionCategory").value);
+
+  if (shared) {
+    let members = activeHouseholdMembers();
+    const memberId = currentKey?.startsWith("member:") ? currentKey.slice(7) : null;
+    const historicalMember = memberId ? memberById(memberId) : null;
+    if (historicalMember && !members.some((member) => String(member.user_id) === String(historicalMember.user_id))) {
+      members = [...members, historicalMember];
+    }
+    select.innerHTML = members.map((member) => {
+      const archived = member.is_active ? "" : " · Akses dihapus";
+      return `<option value="${memberBalanceKey(member.user_id)}">${escapeHtml(memberBalanceLabel(member))}${archived}</option>`;
+    }).join("");
+
+    const preferredExists = currentKey && [...select.options].some((option) => option.value === currentKey);
+    const ownKey = memberBalanceKey(state.user?.id);
+    const ownExists = [...select.options].some((option) => option.value === ownKey);
+    if (preferredExists) select.value = currentKey;
+    else if (ownExists) select.value = ownKey;
+    $("#outcomeSourceGroup > span").textContent = "Sumber dana (Suami/Istri)";
+    return;
+  }
+
+  select.innerHTML = balanceOptionsHtml(null, true);
+  if (editingTransaction) {
+    const sourceAccount = editingTransaction.source === "savings_account"
+      ? savingsAccountById(editingTransaction.source_savings_id)
+      : savingsAccountByLegacyKey(editingTransaction.source);
+    if (sourceAccount?.is_archived) {
+      const sourceKey = outcomeSourceKey(editingTransaction);
+      if (sourceKey && ![...select.options].some((option) => option.value === sourceKey)) {
+        select.insertAdjacentHTML("beforeend", `<option value="${sourceKey}">${escapeHtml(sourceAccount.name)} · Diarsipkan</option>`);
+      }
+    }
+  }
+  if (currentKey && [...select.options].some((option) => option.value === currentKey)) select.value = currentKey;
+  $("#outcomeSourceGroup > span").textContent = "Sumber dana";
+}
+
 function openTransactionDialog(mode, transactionId = null) {
   state.transactionMode = mode;
   state.editingTransactionId = transactionId;
@@ -1744,8 +1865,6 @@ function openTransactionDialog(mode, transactionId = null) {
   $("#outcomeSourceGroup").classList.toggle("hidden", mode !== "outcome");
   renderMemberAllocationFields(isEditing ? state.transactions.find((item) => String(item.id) === String(transactionId)) : null);
   renderSavingsAllocationFields(isEditing ? state.transactions.find((item) => String(item.id) === String(transactionId)) : null);
-  $("#outcomeSource").innerHTML = balanceOptionsHtml(null, true);
-
   const categories = mode === "income" ? incomeCategories : outcomeCategories;
   $("#transactionCategory").innerHTML = `<option value="">Pilih kategori</option>${categories.map((item) => `<option>${item}</option>`).join("")}`;
   const saveButton = $("#saveTransactionButton");
@@ -1760,22 +1879,15 @@ function openTransactionDialog(mode, transactionId = null) {
     $("#transactionCategory").value = transaction.category;
     $("#transactionDescription").value = transaction.description || "";
     if (mode !== "income") {
-      const sourceKey = transaction.source === "member"
-        ? memberBalanceKey(transaction.source_member_id)
-        : ["husband", "wife"].includes(transaction.source)
-          ? memberBalanceKey(legacySourceMemberId(transaction.source))
-          : transaction.source === "savings_account"
-            ? savingsBalanceKey(transaction.source_savings_id)
-            : savingsBalanceKey(savingsAccountByLegacyKey(transaction.source)?.id);
+      const sourceKey = outcomeSourceKey(transaction);
+      renderOutcomeSourceOptions(sourceKey, transaction);
       const sourceAccount = transaction.source === "savings_account"
         ? savingsAccountById(transaction.source_savings_id)
         : savingsAccountByLegacyKey(transaction.source);
-      if (sourceAccount?.is_archived) {
-        $("#outcomeSource").insertAdjacentHTML("beforeend", `<option value="${sourceKey}">${escapeHtml(sourceAccount.name)} · Diarsipkan</option>`);
-        $("#transactionAmount").readOnly = true;
-      }
-      $("#outcomeSource").value = sourceKey;
+      if (sourceAccount?.is_archived) $("#transactionAmount").readOnly = true;
     }
+  } else if (mode === "outcome") {
+    renderOutcomeSourceOptions();
   }
   updateAllocationStatus();
   openModal($("#transactionDialog"));
@@ -1813,6 +1925,13 @@ async function saveTransaction(event) {
   }
   if (state.transactionMode === "income" && personalAllocated + savingsAllocated !== amount) {
     showToast("Total pembagian harus sama dengan nominal income.", "error");
+    return;
+  }
+
+  const selectedCategory = $("#transactionCategory").value;
+  const sharedOutcome = state.transactionMode === "outcome" && isSharedOutcomeCategory(selectedCategory);
+  if (sharedOutcome && !$("#outcomeSource").value?.startsWith("member:")) {
+    showToast("Pengeluaran Bersama harus menggunakan dana Suami atau Istri.", "error");
     return;
   }
 

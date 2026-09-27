@@ -23,7 +23,8 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 - Tagihan bulanan dengan nominal, tanggal berlangganan, serta checklist pembayaran yang otomatis dimulai ulang setiap bulan.
 - Form tambah/edit tagihan tampil sebagai dialog tersendiri seperti form Income/Outcome dan tidak menempel di bagian bawah layar.
 - Setiap akun hanya dapat mengelola tagihan saldonya sendiri dan tetap dapat melihat tagihan anggota lain.
-- Riwayat otomatis membuka bulan berjalan dan dapat difilter berdasarkan jenis, bulan, serta setiap pencatat.
+- Riwayat otomatis membuka bulan berjalan dan dapat difilter berdasarkan jenis, bulan, setiap pencatat, serta Pengeluaran Bersama.
+- Kategori `Pengeluaran Bersama` terpisah dari `Rumah tangga`: pencatat tetap tercatat, sumber dana dapat dipilih dari saldo Suami/Istri, dan transaksi bersama tidak masuk ke riwayat outcome pribadi pencatat.
 - Riwayat dapat diubah antara detail per transaksi dan akumulasi per hari; tampilan harian hanya memunculkan tanggal yang memiliki transaksi.
 - Room master dapat mengubah atau menghapus transaksi siapa pun; anggota lain hanya dapat mengubah transaksi yang mereka catat sendiri.
 - Room master dapat menghapus akses anggota setelah verifikasi `HAPUS` dan saldo anggota menjadi Rp0. Riwayat anggota tetap dipertahankan.
@@ -51,6 +52,7 @@ Website dapat di-deploy sebagai situs statis di Vercel tanpa proses build.
 | `supabase-migration-important-logs.sql` | Membatasi audit baru ke perubahan saldo penting dan menghentikan log tagihan/aset |
 | `supabase-migration-dynamic-savings-settings.sql` | Menambah pos tabungan dinamis, arsip aman, nama keluarga, dan pengaturan gajian |
 | `supabase-migration-defaults-assets-logs.sql` | Mengatur default ruang baru dan mengaktifkan Logs perubahan aset |
+| `supabase-migration-shared-expense.sql` | Mengizinkan Suami/Istri memilih saldo pasangan khusus untuk kategori Pengeluaran Bersama |
 | `vercel.json` | Security headers untuk Vercel |
 | `favicon.svg` | Ikon aplikasi |
 
@@ -114,6 +116,12 @@ dibuat setelah migration dijalankan: gajian nonaktif dan satu pos awal
 `Tabungan pribadi`. Pos serta saldo milik ruang lama tidak dihapus atau
 diganti. Migration juga mulai mencatat penambahan, penghapusan, dan perubahan
 nilai aset pada Logs.
+
+Untuk fitur `Pengeluaran Bersama`, jalankan `supabase-migration-shared-expense.sql`
+setelah migration lain di atas. Migration ini tidak menambah tabel atau kolom;
+hanya mengizinkan anggota aktif memilih saldo anggota aktif lain ketika kategori
+outcome tepat `Pengeluaran Bersama`. Kategori outcome biasa tetap memakai aturan
+akses sumber dana sebelumnya.
 
 ## 2. Menyambungkan frontend ke Supabase
 

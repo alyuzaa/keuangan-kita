@@ -1551,8 +1551,10 @@ begin
     ) then
       raise exception 'Sumber saldo anggota tidak ditemukan';
     end if;
-    if new.source_member_id <> auth.uid() and not public.is_household_master(new.household_id) then
-      raise exception 'Hanya room master yang dapat memakai saldo anggota lain';
+    if new.source_member_id <> auth.uid()
+      and not public.is_household_master(new.household_id)
+      and lower(trim(coalesce(new.category, ''))) <> lower('Pengeluaran Bersama') then
+      raise exception 'Hanya room master yang dapat memakai saldo anggota lain, kecuali untuk Pengeluaran Bersama';
     end if;
   end if;
   return new;
@@ -2297,8 +2299,10 @@ begin
       where profile.household_id = new.household_id
         and profile.user_id = new.source_member_id and profile.is_active
     ) then raise exception 'Sumber saldo anggota tidak ditemukan'; end if;
-    if new.source_member_id <> auth.uid() and not public.is_household_master(new.household_id) then
-      raise exception 'Hanya room master yang dapat memakai saldo anggota lain';
+    if new.source_member_id <> auth.uid()
+      and not public.is_household_master(new.household_id)
+      and lower(trim(coalesce(new.category, ''))) <> lower('Pengeluaran Bersama') then
+      raise exception 'Hanya room master yang dapat memakai saldo anggota lain, kecuali untuk Pengeluaran Bersama';
     end if;
   end if;
 

@@ -279,8 +279,11 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 /* The composition chart replaces the duplicate add buttons on mobile only. */
 .history-chart { display: none; }
 .history-chart-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.history-chart-heading-copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
 .history-chart-heading span, .history-chart-heading small { color: #849087; font-size: 8px; font-weight: 800; letter-spacing: .07em; }
-.history-chart-heading small { max-width: 100px; margin-top: 3px; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.history-chart-heading small { max-width: 170px; margin-top: 3px; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.history-chart-detail-button { flex: 0 0 auto; min-height: 27px; padding: 0 10px; border: 1px solid #d9ddd5; border-radius: 999px; color: #315f50; background: var(--paper); font-size: 8px; font-weight: 850; }
+.history-chart-detail-button:hover { background: #edf3ee; }
 .history-chart-layout { display: grid; grid-template-columns: minmax(126px, 148px) minmax(0, 1fr); gap: 16px; align-items: center; }
 .history-donut-wrap { position: relative; width: 100%; aspect-ratio: 1; }
 .history-donut { width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg); }
@@ -300,7 +303,8 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .chart-color-5 { --chart-color: #8069a8; }
 .chart-color-6 { --chart-color: #d07c4f; }
 .chart-color-7 { --chart-color: #68889c; }
-.chart-color-8 { --chart-color: #8a918c; }
+.chart-color-8 { --chart-color: #a66f5a; }
+.chart-color-9 { --chart-color: #8a918c; }
 .chart-legend-row > i { width: 8px; height: 8px; border-radius: 50%; background: var(--chart-color); }
 .chart-legend-row > div { min-width: 0; display: flex; align-items: baseline; gap: 5px; }
 .chart-legend-row strong { overflow: hidden; color: var(--chart-color); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
@@ -310,6 +314,17 @@ input:focus, select:focus { border-color: #719382; box-shadow: 0 0 0 3px rgba(71
 .chart-empty div { color: #547565; font-size: 30px; }
 .chart-empty strong { margin-top: 3px; color: #38564a; font-size: 11px; }
 .chart-empty span { margin-top: 4px; font-size: 8px; }
+.history-outcome-details { display: grid; gap: 14px; margin-top: 17px; padding-top: 15px; border-top: 1px solid #e6e8e1; }
+.history-outcome-detail-group { overflow: hidden; border: 1px solid #e4e6df; border-radius: 12px; background: rgba(255, 253, 248, .72); }
+.history-outcome-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 11px; background: #f1f2ec; }
+.history-outcome-detail-heading strong { color: #315b4c; font-size: 9px; }
+.history-outcome-detail-heading span { color: #8a938d; font-size: 8px; white-space: nowrap; }
+.history-outcome-detail-list { display: grid; }
+.history-outcome-detail-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 9px; padding: 9px 11px; border-top: 1px solid #ecece6; }
+.history-outcome-detail-row:first-child { border-top: 0; }
+.history-outcome-detail-row > span { min-width: 0; overflow: hidden; color: #4d5f56; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.history-outcome-detail-row > b { color: #2e5648; font-size: 8px; white-space: nowrap; }
+.history-outcome-detail-row > time { color: #8b938e; font-size: 8px; white-space: nowrap; }
 
 /* Logs */
 .logs-heading { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
