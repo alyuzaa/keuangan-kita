@@ -1392,11 +1392,12 @@ function historyOutcomeDetailsHtml(transactions, categories) {
         const items = transactions
           .filter((item) => item.category === category.name)
           .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+        const categoryTotal = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
         return `
           <section class="history-outcome-detail-group">
             <div class="history-outcome-detail-heading">
               <strong>${escapeHtml(category.name)}</strong>
-              <span>${items.length} transaksi</span>
+              <span>${items.length} transaksi - ${formatRupiah(categoryTotal)}</span>
             </div>
             <div class="history-outcome-detail-list">
               ${items.map((item) => `
@@ -1810,23 +1811,43 @@ function renderOutcomeSourceOptions(preferredKey = null, editingTransaction = nu
   const shared = isSharedOutcomeCategory($("#transactionCategory").value);
 
   if (shared) {
-    let members = activeHouseholdMembers();
-    const memberId = currentKey?.startsWith("member:") ? currentKey.slice(7) : null;
-    const historicalMember = memberId ? memberById(memberId) : null;
-    if (historicalMember && !members.some((member) => String(member.user_id) === String(historicalMember.user_id))) {
-      members = [...members, historicalMember];
+    // Pengeluaran Bersama dapat memakai saldo anggota aktif maupun seluruh
+    // tabungan aktif yang terdaftar di database. Sumber historis yang sudah
+    // tidak aktif tetap ditampilkan saat transaksi lama diedit.
+    select.innerHTML = balanceOptionsHtml(null, false);
+
+    if (currentKey?.startsWith("member:")) {
+      const memberId = currentKey.slice(7);
+      const historicalMember = memberById(memberId);
+      if (historicalMember && ![...select.options].some((option) => option.value === currentKey)) {
+        select.insertAdjacentHTML(
+          "beforeend",
+          `<option value="${currentKey}">${escapeHtml(memberBalanceLabel(historicalMember))} · Akses dihapus</option>`,
+        );
+      }
     }
-    select.innerHTML = members.map((member) => {
-      const archived = member.is_active ? "" : " · Akses dihapus";
-      return `<option value="${memberBalanceKey(member.user_id)}">${escapeHtml(memberBalanceLabel(member))}${archived}</option>`;
-    }).join("");
+
+    if (editingTransaction) {
+      const sourceAccount = editingTransaction.source === "savings_account"
+        ? savingsAccountById(editingTransaction.source_savings_id)
+        : savingsAccountByLegacyKey(editingTransaction.source);
+      if (sourceAccount?.is_archived) {
+        const sourceKey = outcomeSourceKey(editingTransaction);
+        if (sourceKey && ![...select.options].some((option) => option.value === sourceKey)) {
+          select.insertAdjacentHTML(
+            "beforeend",
+            `<option value="${sourceKey}">${escapeHtml(sourceAccount.name)} · Diarsipkan</option>`,
+          );
+        }
+      }
+    }
 
     const preferredExists = currentKey && [...select.options].some((option) => option.value === currentKey);
     const ownKey = memberBalanceKey(state.user?.id);
     const ownExists = [...select.options].some((option) => option.value === ownKey);
     if (preferredExists) select.value = currentKey;
     else if (ownExists) select.value = ownKey;
-    $("#outcomeSourceGroup > span").textContent = "Sumber dana (Suami/Istri)";
+    $("#outcomeSourceGroup > span").textContent = "Sumber dana";
     return;
   }
 
@@ -1925,13 +1946,6 @@ async function saveTransaction(event) {
   }
   if (state.transactionMode === "income" && personalAllocated + savingsAllocated !== amount) {
     showToast("Total pembagian harus sama dengan nominal income.", "error");
-    return;
-  }
-
-  const selectedCategory = $("#transactionCategory").value;
-  const sharedOutcome = state.transactionMode === "outcome" && isSharedOutcomeCategory(selectedCategory);
-  if (sharedOutcome && !$("#outcomeSource").value?.startsWith("member:")) {
-    showToast("Pengeluaran Bersama harus menggunakan dana Suami atau Istri.", "error");
     return;
   }
 
